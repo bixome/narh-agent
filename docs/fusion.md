@@ -148,16 +148,34 @@ sont marqués** (`statut` non vide) dans la base de NARH, 16 dans celle d'Ekein.
 Un marquage est une décision humaine — ça vaut plus que trois dépêches. Les
 six se ré-appliquent en les retrouvant par `article.cle`.
 
-**Ordre des opérations :**
+**Fait.** Les deux bases étant écrites pendant l'opération — un onglet ouvert sur
+chaque hôte suffit à déclencher `cycle_auto` —, ni l'arrêt des cycles ni la copie
+de fichier n'étaient praticables. La reprise est donc passée par un `VACUUM INTO`
+(un instantané cohérent d'une base vivante) puis par **une transaction** sur la
+base de NARH : un cycle concurrent se place avant ou après, jamais au milieu.
 
-1. Arrêter tout cycle en cours (aucun démon ne tourne aujourd'hui, mais un
-   onglet ouvert suffit à déclencher `cycle_auto`).
-2. Relever les 6 statuts de NARH, avec la `cle` d'un de leurs articles.
-3. Copier `actu.sqlite`, **et ses `-wal` / `-shm`** — laisser un WAL orphelin
-   d'une autre base est un moyen sûr de perdre les dernières écritures.
-4. `synchroniser(require config/sources.php)` — sans effet attendu, les sources
-   étant identiques, mais c'est ce qui le prouve.
-5. Ré-appliquer les 6 statuts.
+```
+articles 4 442 → 10 034 · groupes 3 541 → 7 632 · sources 59 → 59
+8 statuts ré-appliqués, 0 introuvable
+intégrité ok · clés étrangères saines
+```
+
+**Le piège, et il ne se voyait pas dans le code :** `source` et `groupe` portent
+les mêmes colonnes des deux côtés, **mais pas dans le même ordre**. `maison` et
+`rang` sont en 7ᵉ et 8ᵉ position chez NARH, en avant-dernières chez Ekein, qui
+les a ajoutées par migration après coup. `Base.php` est identique dans les deux
+projets — la divergence n'existe que dans les fichiers `.sqlite`, produits à des
+moments différents de l'histoire du schéma.
+
+Un `INSERT … SELECT *` aurait donc rangé la maison dans `actif` et le rang dans
+`etag`, sur les 59 sources, sans une seule erreur. Les colonnes se nomment une
+par une, et un contrôle compare les **ensembles** de colonnes avant d'écrire.
+
+C'est la leçon transférable de toute l'étape : deux schémas identiques en code ne
+garantissent pas deux tables identiques en base.
+
+Les statuts se sont tous retrouvés par la `cle` de leurs articles — 8, et non 6
+comme mesuré une heure plus tôt : la collecte tournait entre-temps.
 
 ### 2. Les fils : reprise directe
 
