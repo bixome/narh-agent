@@ -158,7 +158,7 @@ final class Collecteur
      * morte n'est pas une nouvelle qui se date).
      *
      * C'est cette écriture, ponctuelle, qui alimente la catégorie « flux » du
-     * journal — voir Base::journal(). Ni compteur ni liste, un instant.
+     * journal — voir Base::saillances(). Ni compteur ni liste, un instant.
      */
     private function transition(int $echecsAvant, int $echecsApres, int $maintenant): ?int
     {

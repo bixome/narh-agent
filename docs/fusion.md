@@ -62,7 +62,7 @@ souvent des scores sportifs « en direct », faux positifs du lexique — de quo
 noyer les deux ou trois grosses actualités de la même fenêtre si tout partageait
 un seul plafond.
 
-**Arbitrage :** garder le calcul, lui rendre son nom, et le brancher sur la
+**Arbitrage — fait.** Garder le calcul, lui rendre son nom, et le brancher sur la
 chronologie unique.
 
 1. `Base::journal()` → **`Base::saillances()`**. Un nom pour une chose : ce sont
@@ -73,7 +73,28 @@ chronologie unique.
    qui décide combien de chaque nature méritent une ligne.
 
 C'est ce qui rend visible la phrase de `CLAUDE.md` : « alerte à 04:30 → conduite
-déclenchée → 1 200 jetons → note ». Aujourd'hui le premier maillon manque.
+déclenchée → 1 200 jetons → note ». Le premier maillon manquait.
+
+Vérifié à l'exécution — `alerte ×2 : Rixe à Compiègne` et `direct : depeche`
+dans la même chronologie, à la même seconde :
+
+```
+20:23:17  warn   actu     alerte ×2 : Rixe à Compiègne : l'homme gravement…
+20:23:17  ok     collecte cycle à la main : 59 source(s), 3 neuve(s)
+20:23:15  info   direct   depeche : Lens - PSG : débuts de Digne, Barcola…
+```
+
+Deux points d'implémentation qui ne se devinaient pas depuis l'arbitrage :
+
+- **`journaliserCycle()` prend désormais la `Base`.** Quatre portes déclenchent
+  un cycle (l'écran, deux chemins d'`api.php`, le démon) ; ajouter un second
+  appel à chacune aurait garanti qu'une cinquième l'oublie. Le paramètre force
+  le passage par la porte unique.
+- **Un repère (`meta.saillances_vu`)**, sans quoi une grosse actu — saillante
+  pendant des heures — serait notée à chaque cycle, soit le même titre toutes
+  les soixante secondes. Au tout premier passage le repère se pose sans rien
+  écrire : installer le démon sur une base déjà remplie déverserait sinon
+  quarante lignes d'un coup.
 
 ### 4. La doctrine d'otow, qui n'a jamais été écrite
 

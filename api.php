@@ -134,7 +134,7 @@ try {
 
         if (narh_reglage('collecte_web', true) && $collecteur->perime($maintenant) && !Collecteur::occupe()) {
             $releve = $collecteur->cycle(false, (int) narh_reglage('cycle_max', 15));
-            Ecran::journaliserCycle($releve, 'sondage');
+            Ecran::journaliserCycle($base, $releve, 'sondage');
             $maintenant = time();
         }
 
@@ -157,7 +157,7 @@ try {
     $force = $action === 'cycle';
     if ($force || (narh_reglage('collecte_web', true) && $collecteur->perime($maintenant) && !Collecteur::occupe())) {
         $releve = $collecteur->cycle($force, (int) narh_reglage('cycle_max', 15));
-        Ecran::journaliserCycle($releve, $force ? 'à la demande' : 'sondage');
+        Ecran::journaliserCycle($base, $releve, $force ? 'à la demande' : 'sondage');
         $maintenant = time();
     }
 

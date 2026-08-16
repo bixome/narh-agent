@@ -107,7 +107,7 @@ final class Ecran
         $amorce = $stats['articles'] === 0;
         if ($amorce || (narh_reglage('collecte_web', true) && $collecteur->perime($maintenant) && !Collecteur::occupe())) {
             $rapport = $collecteur->cycle($amorce, $amorce ? 45 : (int) narh_reglage('cycle_max', 15));
-            self::journaliserCycle($rapport, 'écran');
+            self::journaliserCycle($base, $rapport, 'écran');
             $maintenant = time();
             $stats = $base->stats($maintenant);
         }
@@ -148,7 +148,7 @@ final class Ecran
      *
      * @param array<string, mixed> $rapport
      */
-    public static function journaliserCycle(array $rapport, string $porte): void
+    public static function journaliserCycle(Base $base, array $rapport, string $porte): void
     {
         if ($rapport['saute'] === true) {
             // Un cycle sauté n'est pas un incident : c'est le verrou qui fait
@@ -170,7 +170,98 @@ final class Ecran
             (int) $rapport['erreurs'] > 0 ? ', ' . (int) $rapport['erreurs'] . ' erreur(s)' : '',
         ), (int) $rapport['ms']);
 
+        self::journaliserSaillances($base);
+
         Journal::rogner();
+    }
+
+    /**
+     * Verser ce que la collecte a de saillant dans la chronologie unique.
+     *
+     * C'est le maillon qui manquait à la règle 7 : sans lui, le journal ne
+     * contenait que « cycle : 27 sources, 2 neuves » — le fait qu'un cycle ait
+     * eu lieu, jamais ce qu'il a trouvé. On ne pouvait donc pas y lire
+     * « alerte à 04:30 → conduite déclenchée → note », puisque le premier
+     * maillon n'y était pas.
+     *
+     * Appelée depuis `journaliserCycle()` et de nulle part ailleurs : le
+     * paramètre `Base` y est passé exprès plutôt que d'ajouter un second appel
+     * aux quatre portes qui déclenchent un cycle — une cinquième porte
+     * l'aurait oublié.
+     *
+     * Le repère (`meta.saillances_vu`) évite la répétition : une grosse actu
+     * reste saillante pendant des heures, la noter à chaque cycle remplirait la
+     * chronologie du même titre toutes les soixante secondes. Au tout premier
+     * passage on pose seulement le repère — sinon l'installation d'un démon sur
+     * une base déjà remplie déverserait quarante lignes d'un coup.
+     */
+    private static function journaliserSaillances(Base $base): void
+    {
+        $maintenant = time();
+        $repere = (int) ($base->meta('saillances_vu') ?? 0);
+
+        if ($repere === 0) {
+            $base->setMeta('saillances_vu', (string) $maintenant);
+
+            return;
+        }
+
+        $vu = $repere;
+        foreach (array_reverse($base->saillances($maintenant - 3600, 40)) as $s) {
+            $quand = (int) $s['quand'];
+            if ($quand <= $repere) {
+                continue;
+            }
+            $vu = max($vu, $quand);
+
+            $g = $s['groupe'] ?? [];
+            [$niveau, $source, $message] = match ((string) $s['categorie']) {
+                'actu' => [
+                    (int) ($g['niveau'] ?? 0) >= Alerte::URGENT ? 'error' : 'warn',
+                    'actu',
+                    sprintf(
+                        '%s ×%d : %s',
+                        Alerte::nom((int) ($g['niveau'] ?? 0)),
+                        (int) ($g['sources'] ?? 1),
+                        Util::tronquer((string) ($g['titre'] ?? ''), 90),
+                    ),
+                ],
+                'signal' => [
+                    'info',
+                    'signal faible',
+                    sprintf(
+                        'score %d : %s',
+                        (int) ($g['score'] ?? 0),
+                        Util::tronquer((string) ($g['titre'] ?? ''), 90),
+                    ),
+                ],
+                'ia' => [
+                    'info',
+                    'second avis',
+                    sprintf(
+                        '%s → %s : %s',
+                        Alerte::nom((int) ($g['niveau'] ?? 0)),
+                        Alerte::nom((int) ($g['ia_niveau'] ?? 0)),
+                        Util::tronquer((string) ($g['titre'] ?? ''), 80),
+                    ),
+                ],
+                'pic' => ['warn', 'débit', 'pic : ' . Util::tronquer((string) ($s['texte'] ?? ''), 100)],
+                'flux' => [
+                    ($s['morte'] ?? false) ? 'error' : 'ok',
+                    'flux',
+                    sprintf('%s : source %s', (string) ($s['nom'] ?? ''), ($s['morte'] ?? false) ? 'morte' : 'rétablie'),
+                ],
+                default => ['info', 'collecte', ''],
+            };
+
+            if ($message !== '') {
+                Journal::noter($niveau, $source, $message);
+            }
+        }
+
+        if ($vu > $repere) {
+            $base->setMeta('saillances_vu', (string) $vu);
+        }
     }
 
     /**

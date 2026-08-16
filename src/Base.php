@@ -1043,23 +1043,31 @@ final class Base
         ]);
     }
 
-    /* ---- Journal ----------------------------------------------------------
-       Le panneau de droite ne parlait que de collecte (débit, état des flux).
-       Le journal parle d'événements : cinq choses qui arrivent, chacune à son
-       instant, fondues dans une seule chronologie plutôt que réparties en
-       listes séparées qui vieillissent chacune à sa façon. */
+    /* ---- Saillances -------------------------------------------------------
+       Cinq choses qui arrivent dans la collecte, chacune à son instant, fondues
+       en une liste triée plutôt qu'en listes séparées qui vieillissent chacune
+       à sa façon.
+
+       Ceci n'est **pas** la chronologie : la chronologie est `Journal`, en base,
+       et il n'y en a qu'une (règle 7). Ce qui est calculé ici en est la matière
+       — `Ecran::journaliserSaillances()` la lui verse au fil des cycles.
+
+       La méthode s'est appelée `journal()` tant qu'elle venait d'Ekein-Scrapper,
+       où elle alimentait un panneau du même nom. Deux choses portant le nom du
+       concept central du projet, dont une morte, laissaient croire que la règle
+       7 était branchée sur la collecte alors qu'elle ne l'était pas. */
 
     /**
-     * Le journal : grosse actu, signal faible, avis du second modèle, pic,
+     * Les saillances : grosse actu, signal faible, avis du second modèle, pic,
      * santé des flux — fusionnés et triés par instant décroissant.
      *
      * Chaque entrée porte des champs bruts, pas de texte déjà composé : comme
-     * `alertes()` ou `conduite()`, c'est Vue qui tronque et met en mots. Seul
-     * `categorie` dit à Vue::journal() quel gabarit appliquer à la ligne.
+     * `alertes()` ou `conduite()`, c'est l'appelant qui tronque et met en mots.
+     * Seul `categorie` dit quel gabarit appliquer à la ligne.
      *
      * @return list<array<string, mixed>>
      */
-    public function journal(int $depuis, int $limite = 40): array
+    public function saillances(int $depuis, int $limite = 40): array
     {
         /* Mesuré sur la base réelle : la marge du second avis, une fois
            partagée avec le desk, remonte des dizaines de signaux limitrophes

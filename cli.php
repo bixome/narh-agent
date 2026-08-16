@@ -133,7 +133,7 @@ switch ($commande) {
     case '--une-fois':
     case '--once':
         $r = $collecteur->cycle(in_array('--tout', $args, true));
-        Ecran::journaliserCycle($r, 'à la main');
+        Ecran::journaliserCycle($base, $r, 'à la main');
         ligne(horodate(rapport($r)));
         break;
 
@@ -154,7 +154,7 @@ switch ($commande) {
             /* Le journal ne voit passer que ce qui a eu lieu : un cycle sauté
                est le verrou qui fait son travail, pas un incident.
                `journaliserCycle()` le sait déjà — on ne redécide pas ici. */
-            Ecran::journaliserCycle($r, 'démon');
+            Ecran::journaliserCycle($base, $r, 'démon');
 
             if ($r['saute']) {
                 ligne(horodate(teinte('cycle déjà en cours ailleurs — passe', 'muted')));
