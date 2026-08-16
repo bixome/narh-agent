@@ -253,4 +253,34 @@ final class Piece
             meta: $e['duree'] !== null ? Util::duree((int) $e['duree']) : '',
         );
     }
+
+    /**
+     * Un passage du corpus — le texte retenu, pas le titre.
+     *
+     * C'est le troisième état de la pièce : *reçu* pour une dépêche, *demandé*
+     * pour un tour, **retenu** pour ceci. Le titre de la pièce est l'extrait
+     * lui-même : dans une liste, c'est ce qu'on vient lire — le titre de
+     * l'article, lui, passe en méta, comme la provenance d'une citation.
+     *
+     * Le poids reste calme : un passage ne porte pas d'urgence propre, c'est le
+     * texte d'un article déjà noté ailleurs. Lui en donner une ferait croire à
+     * une alerte là où il n'y a qu'une correspondance de mots.
+     *
+     * @param array<string, mixed> $p
+     */
+    public static function passage(array $p): self
+    {
+        $date = (string) ($p['date'] ?? '');
+
+        return new self(
+            nature: self::PASSAGE,
+            id: (string) ($p['lien'] ?? ''),
+            quand: $date !== '' ? (int) strtotime($date) : 0,
+            titre: (string) ($p['texte'] ?? ''),
+            acteur: (string) ($p['source'] ?? ''),
+            poids: self::CALME,
+            meta: Util::tronquer((string) ($p['titre'] ?? ''), 40),
+            attributs: ['lien' => (string) ($p['lien'] ?? '')],
+        );
+    }
 }

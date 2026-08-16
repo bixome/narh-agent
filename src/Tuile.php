@@ -37,12 +37,20 @@ final class Tuile
     /** Ce qui est retenu : les fils passés. */
     public const MEMOIRE = 'memoire';
 
+    /** Le texte d'un article, lu côté serveur — jamais la page d'origine. */
+    public const LECTURE = 'lecture';
+
+    /** Ce que le corpus retient : des passages, pas des titres. */
+    public const CORPUS = 'corpus';
+
     public const TITRES = [
         self::VEILLE  => 'Veille',
         self::DEPECHE => 'Dépêche',
         self::JOURNAL => 'Journal',
         self::ALERTES => 'Alertes',
         self::MEMOIRE => 'Mémoire',
+        self::LECTURE => 'Lecture',
+        self::CORPUS  => 'Corpus',
     ];
 
     /**
@@ -99,8 +107,68 @@ final class Tuile
             self::JOURNAL => ['entrees' => Journal::lire((int) ($this->params['limite'] ?? 40))],
             self::ALERTES => $this->contenuAlertes(),
             self::MEMOIRE => ['fils' => Memoire::fils(30, Agent::filId())],
+            self::LECTURE => $this->contenuLecture(),
+            self::CORPUS  => [
+                'passages' => Corpus::chercher(
+                    (string) ($this->params['q'] ?? ''),
+                    (int) ($this->params['limite'] ?? 6)
+                ),
+                'q'    => trim((string) ($this->params['q'] ?? '')),
+                'etat' => Corpus::etat(),
+            ],
             default       => [],
         };
+    }
+
+    /**
+     * Le texte d'un article.
+     *
+     * Le corpus d'abord, le réseau seulement s'il n'a rien : lire coûte une à
+     * deux secondes, et rouvrir un vieux fil ne doit pas les repayer à chaque
+     * fois. Ce qui est lu au passage est rangé — c'est la seule lecture qui se
+     * fasse pendant une réponse, et elle ne se refait jamais deux fois.
+     *
+     * Conforme à la règle de la tuile : rien n'est stocké dans le descripteur,
+     * seulement de quoi refaire — ici l'identifiant de la dépêche.
+     *
+     * @return array<string, mixed>
+     */
+    private function contenuLecture(): array
+    {
+        $base = new Base((string) narh_reglage('base_veille'));
+        $a = $base->article((int) ($this->params['id'] ?? 0));
+
+        if ($a === null) {
+            return ['article' => null, 'paragraphes' => [], 'origine' => 'introuvable'];
+        }
+
+        $lien = (string) $a['lien'];
+
+        $st = Db::narh()->prepare('SELECT texte FROM passage WHERE lien = ? ORDER BY rang');
+        $st->execute([$lien]);
+        $ranges = $st->fetchAll(PDO::FETCH_COLUMN);
+
+        if ($ranges !== []) {
+            return ['article' => $a, 'paragraphes' => $ranges, 'origine' => 'corpus'];
+        }
+
+        $r = Lecture::recuperer($lien);
+        if ($r['html'] === null || $r['code'] !== 200) {
+            Corpus::marquerIllisible($lien, 'HTTP ' . $r['code']);
+
+            return ['article' => $a, 'paragraphes' => [], 'origine' => 'illisible', 'code' => $r['code']];
+        }
+
+        $extrait = Lecture::extraire($r['html'], $r['url'], (string) $a['titre']);
+        Corpus::ingerer(
+            $lien,
+            (string) $a['titre'],
+            (string) ($a['source_nom'] ?? ''),
+            date('Y-m-d H:i', (int) $a['date_tri']),
+            $extrait['paragraphes']
+        );
+
+        return ['article' => $a, 'paragraphes' => $extrait['paragraphes'], 'origine' => 'réseau'];
     }
 
     /**

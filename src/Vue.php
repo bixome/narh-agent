@@ -458,6 +458,10 @@ final class Vue
 
             Tuile::MEMOIRE => self::fils($contenu['fils'] ?? [], Agent::filId()),
 
+            Tuile::LECTURE => self::lecture($contenu),
+
+            Tuile::CORPUS => self::corpus($contenu['passages'] ?? [], (string) ($contenu['q'] ?? '')),
+
             default => self::vide('inconnu', 'Cette tuile ne sait rien montrer.'),
         };
 
@@ -467,6 +471,8 @@ final class Vue
                 : count($contenu['evenements'] ?? []) . ' événements',
             Tuile::ALERTES => count($contenu['groupes'] ?? []) . ' sur 6 h',
             Tuile::MEMOIRE => count($contenu['fils'] ?? []) . ' fils',
+            Tuile::LECTURE => count($contenu['paragraphes'] ?? []) . ' paragraphes',
+            Tuile::CORPUS  => count($contenu['passages'] ?? []) . ' passages',
             default        => '',
         };
 
@@ -484,6 +490,85 @@ final class Vue
             . '<div class="xo-panel__body" style="--xo-max-h: 34vh">' . $corps . '</div>'
             . ($compte !== '' ? '<span class="xo-panel__count">' . e($compte) . '</span>' : '')
             . '</section>';
+    }
+
+    /**
+     * Le texte d'un article, lu côté serveur.
+     *
+     * Ni cadre embarqué ni lien qui remplace l'écran : on rend les paragraphes
+     * et rien d'autre. Encadrer la page d'origine aurait chargé ses publicités
+     * et ses traceurs ici — NARH ne fait aucune requête vers l'extérieur depuis
+     * le navigateur, et le lecteur est précisément ce qui rend cette posture
+     * tenable plutôt que gênante.
+     *
+     * L'origine est affichée : lu à l'instant, ou relu depuis le corpus. Un
+     * texte qui date sans le dire laisserait croire à une lecture fraîche.
+     *
+     * @param array<string, mixed> $contenu
+     */
+    public static function lecture(array $contenu): string
+    {
+        $a = $contenu['article'] ?? null;
+        $paragraphes = $contenu['paragraphes'] ?? [];
+        $origine = (string) ($contenu['origine'] ?? '');
+
+        if ($a === null) {
+            return self::vide('introuvable', 'Cette dépêche n\'est plus dans la veille.');
+        }
+
+        if ($paragraphes === []) {
+            return self::vide('illisible', $origine === 'illisible'
+                ? 'Le texte n\'a pas pu être récupéré (HTTP ' . (int) ($contenu['code'] ?? 0) . ') — mur payant ou page morte.'
+                : 'Aucun paragraphe lisible dans cette page.');
+        }
+
+        $html = '<div class="xo-stack">'
+            . '<p class="xo-muted">'
+            . '<span class="xo-bold">' . e((string) $a['titre']) . '</span>'
+            . '</p>'
+            . '<p class="xo-hint">'
+            . e((string) ($a['source_nom'] ?? '')) . ' · '
+            . e(date('d/m H:i', (int) $a['date_tri'])) . ' · '
+            . e($origine === 'corpus' ? 'relu depuis le corpus' : 'lu à l\'instant')
+            . '</p>';
+
+        foreach ($paragraphes as $p) {
+            $html .= '<p>' . e((string) $p) . '</p>';
+        }
+
+        return $html . '</div>';
+    }
+
+    /**
+     * Ce que le corpus retient : des passages, pas des titres.
+     *
+     * Le grain est le paragraphe — c'est toute la différence avec une recherche
+     * dans la veille, qui rend des dépêches. Ici on montre le morceau de texte
+     * qui répond, avec de quoi remonter à l'article.
+     *
+     * @param list<array<string, mixed>> $passages
+     */
+    public static function corpus(array $passages, string $q): string
+    {
+        if ($passages === []) {
+            return self::vide(
+                'silence',
+                $q === ''
+                    ? 'Rien à chercher.'
+                    : 'Aucun passage ne parle de « ' . $q .' ». Le corpus se remplit par `cli.php --ingerer`.'
+            );
+        }
+
+        /* Un passage est une pièce, comme une dépêche ou un tour — c'est le
+           troisième état, *retenu*. Il se rend donc par `ligne()` comme tout le
+           reste : lui donner un gabarit à lui obligerait l'œil à réapprendre à
+           lire en passant du corpus à la veille. */
+        return '<ul class="xo-list" data-xo-list data-xo-menu="#menu-narh" role="listbox"'
+            . ' aria-label="Passages">'
+            . self::lignes(array_map(
+                static fn (array $p): Piece => Piece::passage($p),
+                $passages,
+            )) . '</ul>';
     }
 
     /**

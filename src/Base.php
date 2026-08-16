@@ -422,7 +422,7 @@ final class Base
      *
      * @return list<array<string, mixed>>
      */
-    public function chercherParMots(string $requete, int $limite = 5): array
+    public function chercherParMots(string $requete, int $limite = 5, string $rubrique = ''): array
     {
         $mots = array_values(array_filter(
             preg_split('/\s+/u', mb_strtolower(trim($requete))) ?: [],
@@ -440,6 +440,16 @@ final class Base
         }
         $score = implode(' + ', $conditions);
 
+        /* Une rubrique restreint la recherche sans changer la façon de chercher :
+           « ce qui se discute » et « ce qui est établi » sont la même requête sur
+           un parc différent. Deux méthodes auraient divergé au premier réglage
+           de pertinence touché d'un seul côté. */
+        $filtre = '';
+        if ($rubrique !== '' && $rubrique !== 'tout') {
+            $filtre = ' AND s.rubrique = :rubrique';
+            $args['rubrique'] = $rubrique;
+        }
+
         /* Les colonnes rendues sont celles du fil, pas un sous-ensemble taillé
            pour le modèle : c'est ce qui permet aux sources d'une réponse de
            s'afficher avec la même ligne que la veille (`Piece::depeche`), et de
@@ -450,7 +460,7 @@ final class Base
              FROM article a
              JOIN source s ON s.id = a.source_id
              LEFT JOIN groupe g ON g.id = a.groupe_id
-             WHERE ($score) > 0
+             WHERE ($score) > 0" . $filtre . "
              ORDER BY pertinence DESC, a.date_tri DESC
              LIMIT " . max(1, min($limite, 20))
         );

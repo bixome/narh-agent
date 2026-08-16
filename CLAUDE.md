@@ -285,7 +285,6 @@ domicile : sans eux la fusion serait une amputation, pas une absorption.
 | `api/direct.php` | L'antenne : ouvrir, servir un segment, fermer sur la note de quart |
 | `src/Direct.php` | La conduite du direct : le panel, la mémoire d'antenne, la cadence |
 | `api/fils.php` | Les fils et l'état du moteur — rendus par `Vue` |
-| `api/lecteur.php` | Un article de la veille, rendu en texte, sans quitter la console |
 | `api/liens.php` | La passe de vérification des sources citées — après l'affichage, jamais pendant |
 | `src/Ecran.php` | La coquille : barre d'état, en-tête, conversation, palette |
 | `src/Tuile.php` | Le descripteur d'un résultat encadré — type et paramètres |
@@ -297,7 +296,7 @@ domicile : sans eux la fusion serait une amputation, pas une absorption.
 | `src/Ollama.php` | Le client du moteur local — cURL seul |
 | `src/Outils.php` | Ce que le modèle peut appeler ; bac à sable borné à `var/bac` |
 | `src/Db.php` | La connexion à `narh.sqlite`, partagée par `Journal` et `Memoire` |
-| `src/Lecture.php` | Le **seul** point sortant vers le réseau ; les gardes vivent là |
+| `src/Lecture.php` | Le **seul** point sortant vers le réseau ; les gardes vivent là. Le lecteur n'a pas de route à lui : c'est une **tuile**, et `api/tuile.php` est déjà sa porte (règle 5) |
 | `src/Corpus.php` | Le plein texte : `passage` en FTS5, `article_lu`, au grain du paragraphe |
 | `src/Ia.php` | Le second avis du modèle sur la collecte — consultatif, hors cycle |
 | `src/Base.php`, `src/Collecteur.php`, `src/Flux.php`, `src/Http.php`, `src/Regroupeur.php`, `src/Alerte.php`, `src/Util.php` | Le moteur de veille, porté depuis Ekein-Scrapper |

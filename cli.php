@@ -16,6 +16,9 @@ declare(strict_types=1);
  *   php cli.php --etat          les compteurs
  *   php cli.php --rescorer      réévaluer le fil après retouche du lexique
  *   php cli.php --enrichir-ia   le second avis du modèle local
+ *   php cli.php --ingerer 20    lire vingt articles et en ranger le texte
+ *   php cli.php --ingerer --etat      ce que contient le corpus
+ *   php cli.php --ingerer --nettoyer  repasser le filtre d'habillage
  *   php cli.php --purger        effacer ce qui dépasse la rétention
  *
  * Porté depuis Ekein-Scrapper. Un seul écart de fond, et c'est la règle 7 :
@@ -470,6 +473,111 @@ switch ($commande) {
         Journal::noter('info', 'second avis', 'pic commenté : ' . $texte);
         break;
 
+    /* -- L'ingestion -----------------------------------------------------
+       La veille connaît des titres ; le corpus connaît le texte. Remplir le
+       second demande une à deux secondes par article — dix secondes ajoutées à
+       une question pour cinq articles, au moment précis où l'on attend. D'où
+       cette commande, à part : la recherche n'a plus qu'à consulter. */
+    case '--ingerer':
+        $combien = max(1, min($nombre > 0 ? $nombre : 20, 500));
+
+        if (in_array('--etat', $args, true)) {
+            $etat = Corpus::etat();
+            titre('Corpus');
+            printf(
+                "  %d articles lus · %d passages · %d illisibles · %d liens vérifiés\n",
+                $etat['articles'],
+                $etat['passages'],
+                $etat['echecs'],
+                $etat['liens']
+            );
+            ligne();
+            foreach (Corpus::parSource() as $r) {
+                printf("  %s %s · %s\n", pad((string) $r['source'], 18), pad((int) $r['articles'] . ' articles', 13), (int) $r['passages'] . ' passages');
+            }
+            break;
+        }
+
+        if (in_array('--nettoyer', $args, true)) {
+            titre('Nettoyage du corpus');
+            $n = Corpus::nettoyer();
+            printf("  %d passages retirés · %d → %d\n", $n['avant'] - $n['apres'], $n['avant'], $n['apres']);
+            Journal::noter('ok', 'corpus', sprintf('nettoyage : %d passages retirés', $n['avant'] - $n['apres']));
+            break;
+        }
+
+        titre("Ingestion — $combien articles au plus");
+
+        /* Les agrégateurs sont écartés : leurs liens sont des redirections qui
+           ne mènent au texte qu'après un détour, et l'article d'origine est
+           déjà dans la veille par sa propre source. */
+        $st = $base->pdo()->prepare(
+            "SELECT a.lien, a.titre, a.date_tri, s.nom AS source
+             FROM article a JOIN source s ON s.id = a.source_id
+             WHERE s.rang <> 'agregateur'
+             ORDER BY a.date_tri DESC
+             LIMIT :limite"
+        );
+        $st->bindValue('limite', $combien * 3, PDO::PARAM_INT);
+        $st->execute();
+
+        $lus = $ignores = $echecs = $passages = 0;
+        $debut = microtime(true);
+
+        foreach ($st->fetchAll() as $article) {
+            if ($lus + $echecs >= $combien) {
+                break;
+            }
+            if (Corpus::dejaLu((string) $article['lien'])) {
+                $ignores++;
+                continue;
+            }
+
+            printf('  %s ', pad(mb_strimwidth((string) $article['titre'], 0, 60, '…'), 62));
+
+            $r = Lecture::recuperer((string) $article['lien']);
+
+            if ($r['html'] === null || $r['code'] !== 200) {
+                Corpus::marquerIllisible((string) $article['lien'], 'HTTP ' . $r['code']);
+                $echecs++;
+                ligne(teinte(sprintf('échec (HTTP %d)', $r['code']), 'danger'));
+                continue;
+            }
+
+            $extrait = Lecture::extraire($r['html'], $r['url'], (string) $article['titre']);
+            $n = Corpus::ingerer(
+                (string) $article['lien'],
+                (string) $article['titre'],
+                (string) $article['source'],
+                date('Y-m-d H:i', (int) $article['date_tri']),
+                $extrait['paragraphes']
+            );
+
+            $lus++;
+            $passages += $n;
+            ligne(teinte(sprintf('%2d passages', $n), $n > 0 ? 'success' : 'warning'));
+
+            // On ne martèle pas les serveurs : un article toutes les 300 ms
+            // suffit largement à remplir le corpus sans se faire remarquer.
+            usleep(300_000);
+        }
+
+        ligne();
+        ligne(sprintf(
+            '  %s lus · %s passages · %s échecs · %d déjà connus · %s',
+            teinte((string) $lus, 'bold'),
+            teinte((string) $passages, 'bold'),
+            teinte((string) $echecs, $echecs > 0 ? 'warning' : 'muted'),
+            $ignores,
+            Util::duree((int) round((microtime(true) - $debut) * 1000))
+        ));
+        Journal::noter(
+            $echecs > $lus ? 'warn' : 'ok',
+            'corpus',
+            "ingestion : $lus articles lus, $passages passages, $echecs échecs"
+        );
+        break;
+
     /* -- Entretien ------------------------------------------------------- */
     case '--purger':
         $avant = time() - (int) narh_reglage('retention', 4) * 86400;
@@ -494,6 +602,7 @@ switch ($commande) {
             '--etat'        => 'les compteurs',
             '--rescorer'    => 'réévaluer tout le fil après une retouche du lexique ou des seuils',
             '--enrichir-ia' => 'demander au modèle son avis sur les scores limites et les pics',
+            '--ingerer [n]' => 'lire les n articles les plus récents et en ranger le texte',
             '--purger'      => 'effacer au-delà de la rétention et compacter la base',
         ] as $cle => $role) {
             printf("  %s %s %s\n", teinte('»', 'accent'), teinte(pad($cle, 14), 'bold'), teinte($role, 'muted'));

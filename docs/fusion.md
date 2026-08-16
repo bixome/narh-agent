@@ -230,6 +230,33 @@ ce sont les tables de P5. Les schémas se recopient mot pour mot depuis
 `otow-agent/lib/base.php`. La reprise des lignes se fait **après** que P5 les
 ait créées, pas avant.
 
+**P5 est écrit** — `src/Lecture.php`, `src/Corpus.php`, `api/liens.php`,
+`cli.php --ingerer`, quatre outils de plus. Trois choses en sont ressorties qui
+ne se devinaient pas depuis l'arbitrage :
+
+**Le lecteur n'a pas de route à lui, et c'est le résultat le plus net.** otow
+avait `api/lecteur.php` parce qu'il avait un écran de lecture. NARH n'a pas
+d'écran : il a des tuiles. `Tuile::LECTURE` passe par `api/tuile.php`, déjà la
+porte de toutes les tuiles — une route dédiée aurait été un second chemin vers
+la même chose (règle 5). Même raisonnement pour le corpus.
+
+**Deux constantes attendaient P5 sans qu'on l'ait su en écrivant l'arbitrage :**
+`Piece::PASSAGE` et son glyphe `¶` dans `Vue::GLYPHES`. Un passage se rend donc
+par `Vue::ligne()` comme une dépêche ou un tour — c'est le troisième état de la
+pièce, *retenu*, et l'œil n'a rien à réapprendre. La ligne porte l'extrait comme
+titre, la maison comme acteur, le titre de l'article en méta : dans une liste,
+ce qu'on vient lire est le texte, pas le titre qu'on avait déjà.
+
+**Une limite mesurée, à ne pas prendre pour un corpus propre :** l'extracteur
+retient tout `<p>` de plus de 80 caractères qui n'est pas de l'habillage. Sur
+une page qui mêle un article et un bloc de recirculation — franceinfo le fait —
+des paragraphes hors sujet entrent au nom du mauvais article. Vérifié à
+l'ingestion : un passage sur une médaille de bronze rangé sous « Une pétition
+recueille 30 000 signatures ». Le texte est vrai, son attribution ne l'est pas.
+Le filtre d'habillage ne peut rien contre ça : ce n'est pas de l'habillage, c'est
+un autre article. À traiter par un ancrage sur le conteneur de l'article, pas par
+un motif de plus.
+
 ### 4. Les fichiers hors base
 
 | Fichier otow | Destination |

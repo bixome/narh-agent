@@ -163,7 +163,12 @@ function selectionUnique(sauf = null) {
   }
 }
 
-async function commander(action, item = null, porte = 'inconnue') {
+/* `argument` : ce que le champ a tapé après le nom de la commande. Seules
+   celles qui cherchent en ont besoin — `/corpus incendie Landes`. Les autres
+   portes (palette, menu, bouton) n'en fournissent pas, et n'ont pas à le
+   faire : une commande qui exige un argument doit le dire quand il manque,
+   pas être absente des portes qui ne savent pas en donner. */
+async function commander(action, item = null, porte = 'inconnue', argument = '') {
   if (!action) return;
 
   const cible = selection(item);
@@ -185,6 +190,31 @@ async function commander(action, item = null, porte = 'inconnue') {
     case 'memoire':
       await poserTuile(action);
       return;
+
+    /* Le corpus demande quoi chercher : sans requête il n'a rien à montrer,
+       là où la veille a toujours son fil du moment. */
+    case 'corpus': {
+      const q = (argument ?? '').trim();
+      if (!q) {
+        notifier('info', 'Chercher quoi ?', 'Taper « /corpus » suivi des mots à chercher.', 4000);
+        return;
+      }
+      await poserTuile('corpus', { q });
+      return;
+    }
+
+    /* Lire, c'est afficher le texte ici ; ouvrir, c'est aller sur le site.
+       Les deux existent parce qu'ils ne servent pas au même moment — et lire
+       ne fait aucune requête depuis le navigateur. */
+    case 'lire': {
+      const id = cible?.dataset.value;
+      if (!id) {
+        notifier('info', 'Aucune ligne visée', "Choisir d'abord une dépêche.", 3000);
+        return;
+      }
+      await poserTuile('lecture', { id });
+      return;
+    }
 
     case 'inspecter': {
       /* Le détail va dans son onglet, pas dans le flux : inspecter est un coup
@@ -704,7 +734,8 @@ saisie?.addEventListener('keydown', (e) => {
   saisie.value = '';
 
   if (dit.startsWith('/')) {
-    commander(dit.slice(1).split(/\s+/)[0].toLowerCase(), null, 'champ');
+    const [nom, ...reste] = dit.slice(1).split(/\s+/);
+    commander(nom.toLowerCase(), null, 'champ', reste.join(' '));
     return;
   }
 

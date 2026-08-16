@@ -77,6 +77,64 @@ final class Outils
                     ],
                 ],
             ],
+            [
+                'type' => 'function',
+                'function' => [
+                    'name' => 'chercher_corpus',
+                    'description' => "Cherche dans le TEXTE INTÉGRAL des articles déjà lus, pas seulement leurs titres. "
+                        . "À préférer quand la question demande un détail, un chiffre ou une citation qu'un titre "
+                        . 'ne contient pas.',
+                    'parameters' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'requete' => ['type' => 'string', 'description' => 'Mots-clés à chercher dans le texte des articles'],
+                            'limite'  => ['type' => 'integer', 'description' => 'Nombre de passages, 5 par défaut, 12 maximum'],
+                        ],
+                        'required' => ['requete'],
+                    ],
+                ],
+            ],
+            [
+                'type' => 'function',
+                'function' => [
+                    'name' => 'lire_article',
+                    'description' => "Lit le texte complet d'une dépêche de la veille, à partir de son identifiant. "
+                        . "À n'employer que si une recherche a déjà rendu l'identifiant.",
+                    'parameters' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'id' => ['type' => 'integer', 'description' => 'Identifiant de la dépêche dans la veille'],
+                        ],
+                        'required' => ['id'],
+                    ],
+                ],
+            ],
+            [
+                'type' => 'function',
+                'function' => [
+                    'name' => 'chercher_discussions',
+                    'description' => 'Cherche dans ce qui se discute sur le web social plutôt que dans la presse établie. '
+                        . "Utile pour savoir comment un sujet est reçu, pas ce qu'il est.",
+                    'parameters' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'requete' => ['type' => 'string', 'description' => 'Sujet à chercher dans le web social'],
+                            'limite'  => ['type' => 'integer', 'description' => 'Nombre de fils, 5 par défaut, 20 maximum'],
+                        ],
+                        'required' => ['requete'],
+                    ],
+                ],
+            ],
+            [
+                'type' => 'function',
+                'function' => [
+                    'name' => 'etat_veille',
+                    'description' => 'Donne ce que la veille contient en ce moment : nombre de dépêches, sources '
+                        . "actives, alertes en cours, et l'étendue du corpus lu. À employer quand on demande ce que "
+                        . 'NARH sait, suit, ou depuis quand.',
+                    'parameters' => ['type' => 'object', 'properties' => new stdClass(), 'required' => []],
+                ],
+            ],
         ];
     }
 
@@ -135,11 +193,25 @@ final class Outils
      */
     public static function tuilePour(string $nom, array $arguments): ?Tuile
     {
-        if ($nom !== 'rechercher_actualites' || trim((string) ($arguments['requete'] ?? '')) === '') {
-            return null;
-        }
+        $requete = trim((string) ($arguments['requete'] ?? ''));
 
-        return new Tuile(Tuile::VEILLE, ['q' => (string) $arguments['requete'], 'limite' => 8]);
+        return match (true) {
+            $nom === 'rechercher_actualites' && $requete !== ''
+                => new Tuile(Tuile::VEILLE, ['q' => $requete, 'limite' => 8]),
+
+            $nom === 'chercher_discussions' && $requete !== ''
+                => new Tuile(Tuile::VEILLE, ['q' => $requete, 'rubrique' => 'social', 'limite' => 8]),
+
+            // Chercher dans le texte, c'est avoir besoin de montrer le texte :
+            // la réponse devient vérifiable au passage même qui l'a produite.
+            $nom === 'chercher_corpus' && $requete !== ''
+                => new Tuile(Tuile::CORPUS, ['q' => $requete, 'limite' => 6]),
+
+            $nom === 'lire_article' && (int) ($arguments['id'] ?? 0) > 0
+                => new Tuile(Tuile::LECTURE, ['id' => (int) $arguments['id']]),
+
+            default => null,
+        };
     }
 
     /** @return array{ok: bool, resultat: mixed} */
@@ -155,6 +227,17 @@ final class Outils
                     (string) ($arguments['requete'] ?? ''),
                     (int) ($arguments['limite'] ?? 5),
                 )],
+                'chercher_corpus' => ['ok' => true, 'resultat' => Corpus::chercher(
+                    (string) ($arguments['requete'] ?? ''),
+                    max(1, min((int) ($arguments['limite'] ?? 5), 12)),
+                )],
+                'lire_article'    => ['ok' => true, 'resultat' => self::lireArticle((int) ($arguments['id'] ?? 0))],
+                'chercher_discussions' => ['ok' => true, 'resultat' => self::rechercherActualites(
+                    (string) ($arguments['requete'] ?? ''),
+                    (int) ($arguments['limite'] ?? 5),
+                    'social',
+                )],
+                'etat_veille'     => ['ok' => true, 'resultat' => self::etatVeille()],
                 default => ['ok' => false, 'resultat' => "Outil inconnu : $nom"],
             };
 
@@ -189,7 +272,52 @@ final class Outils
             return 'Aucun résultat.';
         }
 
-        if ($nom === 'rechercher_actualites') {
+        if ($nom === 'chercher_corpus') {
+            $lignes = [];
+            foreach ($resultat as $p) {
+                $lignes[] = sprintf(
+                    "- %s (%s, %s)\n  « %s »",
+                    $p['titre'] ?? '?',
+                    $p['source'] ?? '?',
+                    $p['date'] ?? '?',
+                    // Le passage entier, pas un extrait : c'est précisément ce
+                    // qu'on est allé chercher. Le tronquer rendrait l'outil
+                    // équivalent à une recherche par titre.
+                    (string) ($p['texte'] ?? ''),
+                );
+            }
+
+            return count($resultat) . " passages :\n" . implode("\n", $lignes);
+        }
+
+        if ($nom === 'lire_article') {
+            return sprintf(
+                "%s (%s, %s) :\n\n%s",
+                $resultat['titre'] ?? '?',
+                $resultat['source'] ?? '?',
+                $resultat['date'] ?? '?',
+                implode("\n\n", $resultat['paragraphes'] ?? []),
+            );
+        }
+
+        if ($nom === 'etat_veille') {
+            return sprintf(
+                "La veille suit %d dépêches (%d dans la dernière heure, %d sur le jour) réparties en %d "
+                . "événements, sur %d sources actives sur %d. %d événements en alerte sur six heures. "
+                . 'Le corpus contient le texte intégral de %d articles, soit %d passages.',
+                $resultat['depeches'] ?? 0,
+                $resultat['derniere_heure'] ?? 0,
+                $resultat['dernier_jour'] ?? 0,
+                $resultat['evenements'] ?? 0,
+                $resultat['sources_actives'] ?? 0,
+                $resultat['sources_totales'] ?? 0,
+                $resultat['alertes_6h'] ?? 0,
+                $resultat['corpus_articles'] ?? 0,
+                $resultat['corpus_passages'] ?? 0,
+            );
+        }
+
+        if ($nom === 'rechercher_actualites' || $nom === 'chercher_discussions') {
             $lignes = [];
             foreach (array_slice($resultat, 0, 10) as $a) {
                 $lignes[] = sprintf(
@@ -300,7 +428,7 @@ final class Outils
      * niveau) mais avec une recherche par mots qu'`Alerte`/`Base` n'offrent
      * pas encore : chaque mot vaut un point, on classe par score.
      */
-    private static function rechercherActualites(string $requete, int $limite): array
+    private static function rechercherActualites(string $requete, int $limite, string $rubrique = ''): array
     {
         $requete = trim($requete);
         if ($requete === '') {
@@ -315,6 +443,72 @@ final class Outils
            lit le modèle — deux besoins, une seule source. */
         $base = new Base((string) narh_reglage('base_veille'));
 
-        return $base->chercherParMots($requete, $limite);
+        return $base->chercherParMots($requete, $limite, $rubrique);
+    }
+
+    /**
+     * Le texte d'une dépêche.
+     *
+     * Le corpus d'abord, le réseau ensuite — et ce qui est lu y est rangé. C'est
+     * la seule lecture qui se fasse pendant une réponse : elle coûte une à deux
+     * secondes la première fois, et zéro les suivantes. Remplir le corpus reste
+     * le travail de `cli.php --ingerer`, hors réponse.
+     *
+     * @return array<string, mixed>
+     */
+    private static function lireArticle(int $id): array
+    {
+        if ($id <= 0) {
+            throw new InvalidArgumentException('Identifiant de dépêche manquant.');
+        }
+
+        $contenu = (new Tuile(Tuile::LECTURE, ['id' => $id]))->contenu();
+        $a = $contenu['article'] ?? null;
+
+        if ($a === null) {
+            throw new RuntimeException("Aucune dépêche #$id dans la veille.");
+        }
+        if (($contenu['paragraphes'] ?? []) === []) {
+            throw new RuntimeException(
+                "Le texte de la dépêche #$id n'est pas lisible (mur payant ou page morte)."
+            );
+        }
+
+        return [
+            'id'          => $id,
+            'titre'       => (string) $a['titre'],
+            'source'      => (string) ($a['source_nom'] ?? ''),
+            'date'        => date('d/m H:i', (int) $a['date_tri']),
+            'paragraphes' => $contenu['paragraphes'],
+        ];
+    }
+
+    /**
+     * Ce que NARH sait en ce moment.
+     *
+     * Le modèle n'a aucun moyen de le deviner, et il invente volontiers des
+     * chiffres quand on lui demande « combien d'articles suis-tu ». Mieux vaut
+     * qu'il puisse répondre juste.
+     *
+     * @return array<string, mixed>
+     */
+    private static function etatVeille(): array
+    {
+        $base = new Base((string) narh_reglage('base_veille'));
+        $maintenant = time();
+        $stats = $base->stats($maintenant);
+        $corpus = Corpus::etat();
+
+        return [
+            'depeches'         => (int) $stats['articles'],
+            'derniere_heure'   => (int) $stats['h1'],
+            'dernier_jour'     => (int) $stats['h24'],
+            'evenements'       => (int) $stats['groupes'],
+            'sources_actives'  => (int) ($stats['sources']['saines'] ?? 0),
+            'sources_totales'  => (int) ($stats['sources']['total'] ?? 0),
+            'alertes_6h'       => count($base->alertes($maintenant - 21600, Alerte::ALERTE, 50)),
+            'corpus_articles'  => $corpus['articles'],
+            'corpus_passages'  => $corpus['passages'],
+        ];
     }
 }
