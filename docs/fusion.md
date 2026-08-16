@@ -257,11 +257,27 @@ Le filtre d'habillage ne peut rien contre ça : ce n'est pas de l'habillage, c'e
 un autre article. À traiter par un ancrage sur le conteneur de l'article, pas par
 un motif de plus.
 
+**La reprise est faite.**
+
+```
+article_lu   542 repris, 0 déjà connus ici
+passages   4 083 repris
+corpus       342 articles · 4 123 passages · 203 illisibles
+```
+
+Les 203 illisibles ne sont pas un échec de la reprise : ce sont des murs payants
+et des pages mortes qu'otow avait déjà rencontrés, et les garder évite de les
+ré-essayer un par un. C'est précisément ce à quoi sert `article_lu`.
+
+Contrôle : une recherche sur le corpus repris (« gouvernement budget ») rend
+trois passages classés. L'index FTS5 se reconstruit bien à l'insertion — mieux
+valait le vérifier que le supposer.
+
 ### 4. Les fichiers hors base
 
 | Fichier otow | Destination |
 |---|---|
-| `data/reglages.json` | `modele`, `temperature`, `prompt_systeme`, `outils_auto` → les réglages NARH. `ekein_db` disparaît (NARH tient sa propre collecte). `metacognition` et `souligner_doutes` disparaissent (renoncement assumé). |
+| `data/reglages.json` | **Rien à reprendre, vérifié.** `modele` (`llama3.2:3b`) et `temperature` (0.7) sont déjà ceux de NARH ; `outils_auto` a le même défaut ; le `prompt_systeme` de NARH parle de veille et de console, celui d'otow d'« un agent local intégré à une console web » — le reprendre serait régresser. `ekein_db` est caduc, `metacognition` et `souligner_doutes` sont un renoncement assumé. |
 | `data/liens.json` | **Devient une table**, pas un JSON — même raison que les réglages. Clé md5 du lien, `ok`, `quand`. |
 | `data/journal.log` | Abandonné. |
 | `data/sandbox/` | `var/bac`. |
