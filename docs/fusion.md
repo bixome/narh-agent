@@ -300,6 +300,39 @@ sur la bonne base plutôt que d'avoir à la remplacer sous lui.
 7. Reprise du corpus.
 8. Suppression des deux dossiers et de leurs deux vhosts nginx.
 
+## Ce qui a été fait
+
+Les huit étapes sont passées. Ce que la fusion a produit, mesuré après coup :
+
+| | Avant | Après |
+|---|---|---|
+| Projets à maintenir | 3 | 1 |
+| Copies de XOSHUI | 3, dont 2 dérivées | 1 |
+| Collecteurs sur les 59 flux | 2 | 1 |
+| Chronologies | 3 | 1 |
+| Fichiers de doctrine | 2 (otow n'en avait aucun) | 1 |
+| Dépêches | 4 397 | 10 124 |
+| Corpus | — | 342 articles · 4 123 passages |
+| Fichiers PHP | 34 | 41 |
+
+**Les trois choses que la fusion a apprises et que la lecture du code n'avait pas
+données :**
+
+1. Deux schémas identiques en code ne garantissent pas deux tables identiques en
+   base — `maison` et `rang` n'étaient pas dans le même ordre.
+2. Le code appliquait deux règles qu'aucun document ne portait, et otow n'avait
+   aucun document du tout : sa doctrine ne vivait que dans ses en-têtes.
+3. Le concept central du projet avait un homonyme mort dans le code, qui faisait
+   croire que la règle 7 était branchée alors qu'elle ne l'était pas.
+
+**Ce qui reste ouvert, et qui n'est pas une dette de la fusion :**
+
+- L'attribution des passages sur les pages qui mêlent article et recirculation
+  (voir II.3). À traiter par un ancrage sur le conteneur, pas par un motif.
+- `NARH_PHASE` a fait son office. Son propre commentaire dit de la retirer quand
+  la v1 est complète — elle l'est. Sa suppression touche la barre d'état, ce
+  n'est donc pas une ligne mais un petit geste, laissé au prochain passage.
+
 ## Ce que ça change dans `CLAUDE.md`
 
 - **Règles du projet** : ajouter *la reprise se compte en maisons*, *le statut

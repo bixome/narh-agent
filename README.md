@@ -41,12 +41,18 @@ parler ne demande jamais de faire défiler d'abord.
 | **P2** | La voix — Ollama, outils, flux SSE, fils en base | ✔ |
 | **P3** | Le pont — interroger une ligne, remonter aux sources | ✔ |
 | **P4** | La boucle — le direct, la note de quart | ✔ |
-| **P5** | La mémoire longue — corpus FTS5, lecteur, rejeu | en cours |
+| **P5** | La mémoire longue — corpus FTS5, lecteur, liens | ✔ |
 
-**La fusion est en cours.** Ekein-Scrapper et otow-agent sont absorbés puis
-supprimés ; P5 cesse d'être facultatif du moment que le lecteur et le corpus
-n'ont plus d'autre domicile. Ce qui a été arbitré avant d'écrire une ligne est
-dans **[docs/fusion.md](docs/fusion.md)**.
+**La fusion est faite.** Ekein-Scrapper et otow-agent ont été absorbés puis
+supprimés : NARH ne dépend plus que de [XOSHUI](../XOSHUI), et encore, par copie.
+Ce qui a été arbitré avant d'écrire une ligne, et ce que la reprise a fait
+apparaître, est dans **[docs/fusion.md](docs/fusion.md)**.
+
+| | |
+|---|---|
+| Collecte | 10 124 dépêches · 7 673 événements · 59 sources |
+| Corpus | 342 articles lus · 4 123 passages |
+| Conversation | 26 fils · 173 tours |
 
 ## Lancer
 

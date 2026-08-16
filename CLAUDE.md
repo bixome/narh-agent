@@ -261,7 +261,7 @@ marqueur et par l'acteur affiché, jamais par un fond de couleur ni un alignemen
 | **P2** | La voix | Ollama, outils, flux SSE, fils en base, conversation. ✔ |
 | **P3** | Le pont | `interroger` depuis une ligne ; sources cliquables vers la veille. ✔ |
 | **P4** | La boucle | Le direct : la veille déclenche la production, l'antenne rend sa note de quart. ✔ |
-| **P5** | La mémoire longue | Corpus FTS5, lecteur d'articles, rejeu du journal. |
+| **P5** | La mémoire longue | Corpus FTS5, lecteur d'articles, vérification des liens. ✔ |
 
 Porter la veille avant d'écrire la boucle n'est pas de la prudence : P1 est ce qui
 prouve que la coque tient sous du vrai trafic, et la boucle ne se conçoit
