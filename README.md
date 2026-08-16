@@ -70,7 +70,7 @@ mêmes sources.
 D:\laragon\bin\php\php-8.3.30-Win32-vs16-x64\php.exe cli.php --veille
 ```
 
-Mettre alors `cycle_auto` à `false` dans `config/reglages.local.php` : l'écran
+Mettre alors `collecte_web` à `false` dans `config/reglages.local.php` : l'écran
 devient un simple lecteur de la base, et répond en quelques millisecondes.
 
 `--une-fois` pour un seul relevé, `--etat` pour l'état des sources, `--verifier`

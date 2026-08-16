@@ -23,9 +23,11 @@ return [
 
     // La mémoire de NARH : journal, fils, messages, corpus.
     'base'        => NARH_VAR . '/narh.sqlite',
-    // La collecte. NARH tient la sienne : deux collecteurs sur le même fichier
-    // se marcheraient dessus, et Ekein-Scrapper doit pouvoir continuer à
-    // tourner de son côté sans rien partager.
+    // La collecte, écrite par `cli.php --veille`. Séparée de la mémoire parce
+    // qu'un écrivain qui tourne toutes les 60 s ne se mélange pas avec l'écran
+    // et le corpus : ce sont des verrous qu'on ne saurait pas reproduire.
+    // (La raison d'origine — laisser Ekein-Scrapper tourner de son côté — est
+    // caduque depuis son absorption ; la séparation, elle, tient toujours.)
     'base_veille' => NARH_VAR . '/actu.sqlite',
     'retention'   => 4,        // jours d'articles conservés
 
@@ -104,6 +106,18 @@ return [
         'temperature' => 0.7,
     ],
     'ia_marge' => 2,
+
+    /* Le second avis (`php cli.php --enrichir-ia`). Éteint par défaut : il
+       n'ajoute rien qu'on attende, et une commande qui appelle un service
+       absent doit le dire plutôt que d'échouer. À activer dans
+       `config/reglages.local.php` quand on veut vraiment l'avis.
+
+       `ia_lot` borne le passage : juger 7 600 événements d'un coup demanderait
+       des heures à un modèle local pour un avis qui, par construction, ne
+       décide de rien. */
+    'ia_activee' => false,
+    'ia_lot'     => 10,
+    'ia_timeout' => 20,
 
     // Un pic d'arrivées : la dernière tranche dépasse la moyenne des autres
     // d'autant, et pèse au moins ce plancher — sans lui, une nuit calme fait un

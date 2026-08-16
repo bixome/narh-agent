@@ -92,6 +92,7 @@ final class Ollama
         float $temperature = 0.7,
         int $timeout = 8,
         int $maxJetons = 60,
+        bool $json = false,
     ): ?array {
         $charge = [
             'model'    => $modele,
@@ -104,6 +105,14 @@ final class Ollama
                 'num_predict' => $maxJetons,
             ],
         ];
+
+        /* Contraindre la sortie à du JSON valide. Demandé par `Ia`, qui attend
+           un objet et non une phrase : sans cette contrainte, un modèle de 3 B
+           préfixe volontiers son objet d'un « Voici le résultat : » qui fait
+           échouer le décodage une fois sur trois. */
+        if ($json) {
+            $charge['format'] = 'json';
+        }
 
         $ch = curl_init($this->url . '/api/chat');
         curl_setopt_array($ch, [
