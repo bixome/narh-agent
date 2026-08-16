@@ -3,38 +3,50 @@
 Méta-agent local : une veille d'actualité qui tourne en continu, un modèle qui
 répond quand on l'interroge, et — c'est le but — une boucle entre les deux. La
 veille vient d'**Ekein-Scrapper**, l'agent d'**otow-agent** ; NARH est la coque
-qui les fait tenir dans un seul écran.
+qui les fait tenir dans un seul écran, et qui les remplace.
 
 Interface : **[XOSHUI](../XOSHUI)** en mode console (`xo-console`). PHP 8.2+ et
 JavaScript vanilla — **aucun build, aucune dépendance, aucune ressource externe**.
 
 ```
-┌─ Inspecteur ──┐┌─ Événements ───────────────┐┌─ Journal ─────┐
-│               ││                            ││               │
-│  ┌────────┐   ││       ┌───────────┐        ││  ┌───────┐    │
-│  │  rien  │   ││       │  silence  │        ││  │ calme │    │
-│  └────────┘   ││       └───────────┘        ││  └───────┘    │
-└───────────────┘└────────────────────────────┘└───────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│ veille · 59 flux    agent · llama3.2:3b            18:42:07   │  barre d'état
+├──────────────────────────────────────────────────────────────┤
+│  ┌─ Veille ──────┐  ┌─ Alertes ─────┐  ┌─ Fils ─────────┐    │  en-tête
+│  │ 9 990 dépêches│  │ 3 en cours    │  │ 12 fils        │    │
+│  └───────────────┘  └───────────────┘  └────────────────┘    │
+├──────────────────────────────────────────────────────────────┤
+│  > _                                                          │  le champ
+│                                                               │
+│  ▸ 18:41  agent    la réponse la plus récente, en tête        │  conversation
+│  ▸ 18:41  vous     la question qui l'a produite               │  (défile)
+│  ▸ 18:39  veille   ┌─ tuile ────────────────────────┐         │
+│                    │ ce qu'on regardait à ce moment │         │
+│                    └────────────────────────────────┘         │
+├──────────────────────────────────────────────────────────────┤
+│ ↑↓ parcourir   Ctrl+K palette   ? aide   Échap fermer         │  xo-keys
+└──────────────────────────────────────────────────────────────┘
 ```
 
-## État : P0 — la coque
+Une surface, trois bandes. Le plus récent en tête, le champ juste sous
+l'en-tête : ce qui vient d'arriver est toujours immédiatement sous le curseur, et
+parler ne demande jamais de faire défiler d'abord.
 
-Les trois écrans existent, la grammaire est posée, le linter est vert. **Rien
-n'est branché derrière** : c'est voulu, et l'écran le dit lui-même plutôt que de
-faire semblant.
+## État
 
 | Phase | | |
 |---|---|---|
-| **P0** | La coque | ✔ fait |
-| P1 | La veille — collecteur, base, arbre et fil plat | |
-| P2 | La voix — Ollama, outils, flux, fils en base | |
-| P3 | Le pont — interroger une ligne, remonter aux sources | |
-| P4 | La boucle — conduites déclenchées, note de quart | |
-| P5 | La mémoire longue — corpus, lecteur, rejeu | |
+| **P0** | La coque — barre d'état, en-tête, conversation, palette | ✔ |
+| **P1** | La veille — collecteur, `actu.sqlite`, arbre et fil plat | ✔ |
+| **P2** | La voix — Ollama, outils, flux SSE, fils en base | ✔ |
+| **P3** | Le pont — interroger une ligne, remonter aux sources | ✔ |
+| **P4** | La boucle — le direct, la note de quart | ✔ |
+| **P5** | La mémoire longue — corpus FTS5, lecteur, rejeu | en cours |
 
-Ce que P0 démontre déjà : **une action, une porte**. Le menu « Actions », le clic
-droit et la palette (`Ctrl+K`) mènent tous à la même fonction — elle répond pour
-l'instant qu'elle n'est pas branchée, ce qui est exactement ce qu'on veut voir.
+**La fusion est en cours.** Ekein-Scrapper et otow-agent sont absorbés puis
+supprimés ; P5 cesse d'être facultatif du moment que le lecteur et le corpus
+n'ont plus d'autre domicile. Ce qui a été arbitré avant d'écrire une ligne est
+dans **[docs/fusion.md](docs/fusion.md)**.
 
 ## Lancer
 
@@ -47,6 +59,22 @@ Sinon, le serveur intégré de PHP suffit :
 ```bash
 D:\laragon\bin\php\php-8.3.30-Win32-vs16-x64\php.exe -S localhost:8100 -t D:\laragon\www\narh-agent
 ```
+
+## La veille en fond
+
+Sans démon, la collecte ne relève que lorsqu'un onglet est ouvert — mesuré au
+moment de la fusion : 4 397 dépêches contre 9 990 pour la même fenêtre et les
+mêmes sources.
+
+```bash
+D:\laragon\bin\php\php-8.3.30-Win32-vs16-x64\php.exe cli.php --veille
+```
+
+Mettre alors `cycle_auto` à `false` dans `config/reglages.local.php` : l'écran
+devient un simple lecteur de la base, et répond en quelques millisecondes.
+
+`--une-fois` pour un seul relevé, `--etat` pour l'état des sources, `--verifier`
+après avoir ajouté un flux, `--rescorer` après avoir touché au lexique.
 
 ## Vérifier l'interface
 

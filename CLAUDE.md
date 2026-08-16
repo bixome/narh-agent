@@ -11,6 +11,8 @@ Servi par Laragon (**nginx**, pas Apache) → http://narh-agent.test
 
 **[README.md](README.md)** — ce que fait l'outil et comment le lancer.
 **[docs/deploiement.md](docs/deploiement.md)** — ce qui ne doit pas être servi.
+**[docs/fusion.md](docs/fusion.md)** — l'absorption des deux projets d'origine :
+ce qui a été arbitré, et pourquoi, avant qu'une ligne soit écrite.
 
 ## L'organisme
 
@@ -265,7 +267,9 @@ Porter la veille avant d'écrire la boucle n'est pas de la prudence : P1 est ce 
 prouve que la coque tient sous du vrai trafic, et la boucle ne se conçoit
 correctement qu'une fois le journal unique en place.
 
-**Périmètre de la v1 : P0 → P3.**
+**Périmètre de la v1 : P0 → P5.** P5 était facultatif tant qu'otow-agent existait
+à côté. Du moment qu'on le supprime, le lecteur et le corpus n'ont plus d'autre
+domicile : sans eux la fusion serait une amputation, pas une absorption.
 
 ## Fichiers
 
@@ -274,12 +278,15 @@ correctement qu'une fois le journal unique en place.
 | `bootstrap.php` | Constantes, autoload, réglages, `e()` |
 | `config/reglages.php` | Chemins des deux bases, Ollama, cadences (`reglages.local.php` écrase) |
 | `index.php` | **La** page — il n'y en a qu'une |
+| `cli.php` | Le démon et les commandes d'exploitation — refuse de tourner hors `PHP_SAPI` cli |
 | `api.php` | L'état de la collecte, le marquage, le cycle à la demande |
 | `api/chat.php` | Le flux SSE d'une réponse — la **seule** route qui streame |
 | `api/tuile.php` | Poser une tuile dans la conversation |
 | `api/direct.php` | L'antenne : ouvrir, servir un segment, fermer sur la note de quart |
 | `src/Direct.php` | La conduite du direct : le panel, la mémoire d'antenne, la cadence |
 | `api/fils.php` | Les fils et l'état du moteur — rendus par `Vue` |
+| `api/lecteur.php` | Un article de la veille, rendu en texte, sans quitter la console |
+| `api/liens.php` | La passe de vérification des sources citées — après l'affichage, jamais pendant |
 | `src/Ecran.php` | La coquille : barre d'état, en-tête, conversation, palette |
 | `src/Tuile.php` | Le descripteur d'un résultat encadré — type et paramètres |
 | `src/Vue.php` | Le rendu partagé — une seule grammaire de ligne pour toute pièce |
@@ -290,25 +297,55 @@ correctement qu'une fois le journal unique en place.
 | `src/Ollama.php` | Le client du moteur local — cURL seul |
 | `src/Outils.php` | Ce que le modèle peut appeler ; bac à sable borné à `var/bac` |
 | `src/Db.php` | La connexion à `narh.sqlite`, partagée par `Journal` et `Memoire` |
+| `src/Lecture.php` | Le **seul** point sortant vers le réseau ; les gardes vivent là |
+| `src/Corpus.php` | Le plein texte : `passage` en FTS5, `article_lu`, au grain du paragraphe |
+| `src/Ia.php` | Le second avis du modèle sur la collecte — consultatif, hors cycle |
 | `src/Base.php`, `src/Collecteur.php`, `src/Flux.php`, `src/Http.php`, `src/Regroupeur.php`, `src/Alerte.php`, `src/Util.php` | Le moteur de veille, porté depuis Ekein-Scrapper |
 | `libs/js/narh.js` | La porte unique côté navigateur : `commander()`, le sondage, le flux |
 | `libs/{css,js,fonts}/xoshui*` | XOSHUI, **copié** depuis `D:\laragon\www\XOSHUI` |
 | `tools/lint.php` | Le linter de XOSHUI, **copié** — `php tools/lint.php` |
 | `var/` | Bases, verrous, bac à sable — jamais versionné, **jamais servi** |
 
-À venir : `src/Lecture.php` et le corpus FTS5 (P5).
-
 ## Règles du projet
 
 - `declare(strict_types=1)` partout, `e()` autour de toute sortie HTML.
 - PDO, requêtes préparées. Aucune concaténation de valeur dans du SQL.
-- Un seul point sortant vers le réseau (`src/Lecture.php` en P5) : les gardes
-  contre les adresses privées vivent là, une fois pour toutes. Le bac à sable
-  fichiers est borné à `var/bac`, sans sortie possible.
+- Un seul point sortant vers le réseau (`src/Lecture.php`) : les gardes contre
+  les adresses privées vivent là, une fois pour toutes. Le bac à sable fichiers
+  est borné à `var/bac`, sans sortie possible.
+- **Aucune requête vers l'extérieur depuis le navigateur.** Pas seulement les
+  assets : le lecteur récupère le texte **côté serveur** et n'en rend que les
+  paragraphes. Encadrer la page d'origine aurait été plus simple, mais aurait
+  chargé ses publicités et ses traceurs dans l'écran. C'est une posture, pas une
+  optimisation. *(Doctrine d'otow-agent, qui ne l'avait écrite nulle part.)*
 - **Une règle, un endroit.** Un seuil se décide dans la classe qui le porte ; la
-  vue reçoit un résultat, elle ne refait pas le calcul.
+  vue reçoit un résultat, elle ne refait pas le calcul. `Base::aRelancer()` pour
+  « à relancer », `Base::clauses()` pour le filtre — écrit une fois, servi à
+  `flux()` **et** `arbre()`, sinon changer de vue changerait ce qu'on regarde.
 - Toute commande passe par `commander()` (règle 5), et se journalise là — pas dans
   chacun de ses appelants.
+- **La reprise se compte en maisons, pas en flux.** Le Monde publie cinq flux,
+  BFM cinq, francetvinfo six : `recalculerGroupe()` regroupe par `source.maison`
+  et ignore le rang `agregateur`. Sans ce regroupement, un événement qu'une seule
+  rédaction porte vaudrait déjà cinq confirmations. Ajouter une source sans lui
+  donner de `maison`, c'est rouvrir le double comptage.
+- **Le statut porte sur le groupe**, jamais sur la dépêche : on suit un sujet, et
+  les reprises qui arrivent après en héritent. Un groupe `suivi` ou `traite`
+  échappe à la rétention (`purger()`).
+- **Toute source ajoutée passe par `php cli.php --verifier`** avant d'être
+  retenue, et **toute retouche du lexique ou des seuils demande
+  `php cli.php --rescorer`** : une dépêche n'est notée qu'à son arrivée.
+- **`--enrichir-ia` ne se planifie pas.** À la main, quand on veut l'avis. Rien ne
+  dépendant de sa fraîcheur, une tâche répétée ne serait qu'un processus de fond
+  qu'on oublie et dont on ne lit jamais la sortie. Ne pas proposer de `schtasks`,
+  de cron ni de boucle pour cette commande.
+- **La lecture d'article se fait hors réponse.** Lire un article coûte une à deux
+  secondes ; cinq articles, c'est dix secondes ajoutées à une question, au moment
+  précis où l'on attend. Le corpus se remplit à part (`cli.php --ingerer`), la
+  recherche ne fait que le consulter. Même raison pour la vérification des liens :
+  l'écran affiche d'abord, **puis** estompe ce qui ne répond pas.
+- **Le grain du corpus est le paragraphe, pas l'article** — c'est ce qui permet de
+  donner au modèle le passage utile plutôt que trois pages.
 
 ## Pièges déjà rencontrés
 
@@ -366,3 +403,11 @@ Ils ont été payés dans les deux projets d'origine. Ils se transfèrent avec l
 - **Les réglages en JSON à côté d'une base** : `config/reglages.php` pour ce qui
   doit se lire sans PHP ni base, le reste en base.
 - **Les doubles copies** de XOSHUI, des polices et du favicon : une seule ici.
+- **Le CSS maison** d'otow-agent : 12,7 Ko d'`assets/otow.css` chargés par-dessus
+  la feuille du framework. Ce qui manque manque à XOSHUI (règle 1). NARH n'a
+  aucun fichier CSS propre, et n'en aura pas.
+- **La méta-cognition** d'otow-agent — vraisemblance des jetons, ancrage,
+  `souligner_doutes`. Renoncement assumé, pas oubli de portage : un modèle local
+  qui commente sa propre confiance produit une seconde voix qu'on ne sait ni
+  vérifier ni reproduire, à côté d'un score lexical qui, lui, l'est. Ne pas la
+  réintroduire en croyant compléter le portage.

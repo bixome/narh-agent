@@ -20,8 +20,12 @@ const NARH_VERSION = '0.1';
 
 /* La phase en cours. Elle ne pilote aucun comportement : elle s'affiche, pour
    qu'un écran encore muet dise pourquoi il l'est plutôt que de passer pour
-   cassé. À retirer quand la v1 est complète. */
-const NARH_PHASE = 'P0';
+   cassé. À retirer quand la v1 est complète.
+
+   Restée à 'P0' jusqu'à l'absorption des deux projets d'origine, alors que P1 à
+   P4 tournaient : une constante qui ment est pire qu'une constante absente,
+   puisque l'écran l'affiche. */
+const NARH_PHASE = 'P5';
 
 /* Sans ce réglage explicite, PHP retombe sur l'UTC de l'ini (jamais fixé sur
    cette machine) : tout l'horodatage — journal, heure donnée au modèle, dates
