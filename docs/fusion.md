@@ -211,6 +211,18 @@ Reprise par `ATTACH` puis `INSERT … SELECT`, avec remap des identifiants
 (`narh.sqlite` a déjà ses propres fils) et `jetons` à 0 pour l'historique — la
 valeur n'a jamais été mesurée chez otow, l'inventer serait pire que l'avouer.
 
+**Fait.**
+
+```
+5 fils, 24 messages repris · total NARH : 26 fils, 173 messages
+2 fichiers de bac à sable repris dans var/bac
+intégrité ok · clés étrangères saines
+```
+
+Le volume est dérisoire à côté du corpus (4 083 passages, 542 articles lus),
+mais c'est la partie qu'aucune ingestion ne saurait refaire : ce sont des
+questions posées par quelqu'un.
+
 ### 3. Le corpus : reprise différée
 
 `passage` (FTS5) et `article_lu` **n'existent pas encore** dans `narh.sqlite` :
