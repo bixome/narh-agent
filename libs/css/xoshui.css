@@ -1,0 +1,1928 @@
+/* ==========================================================================
+   XOSHUI 1.0 — feuille unique. Aucune dépendance, aucun build.
+   <link rel="stylesheet" href="/libs/css/xoshui.css">
+   ========================================================================== */
+
+/* --- 0. Police embarquée -------------------------------------------------
+   JetBrains Mono, auto-hébergée dans libs/fonts/webfonts/ — jamais chargée
+   depuis le réseau. Deux graisses suffisent : le framework n'utilise que 400
+   et 700, et aucune italique. Fichiers absents, le navigateur passe à la pile
+   système sans rien casser. */
+
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("../fonts/webfonts/JetBrainsMono-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("../fonts/webfonts/JetBrainsMono-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* --- 1. Tokens ---------------------------------------------------------- */
+
+:root {
+  --xo-bg:        #1E1E2E;
+  --xo-panel:     #181825;
+  --xo-subtle:    #252537;
+  --xo-raise:     #313244;
+  --xo-fg:        #CDD6F4;
+  --xo-muted:     #A6ADC8;
+  --xo-faint:     #6C7086;   /* décor seulement : contraste < 4.5:1 */
+  --xo-inverse:   #1E1E2E;
+  --xo-accent:    #89B4FA;
+  --xo-success:   #A6E3A1;
+  --xo-warning:   #F9E2AF;
+  --xo-danger:    #F38BA8;
+  --xo-info:      #94E2D5;
+  --xo-special:   #CBA6F7;
+  --xo-alt:       #FAB387;
+  --xo-border:    #45475A;
+  --xo-rule:      #313244;
+  --xo-add:       #1B3A2A;
+  --xo-del:       #4A1F2B;
+  --xo-scrim:     rgba(17,17,27,.6);
+  --xo-term:      #000000;   /* fond terminal : le seul noir pur du système */
+
+  --xo-font: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas,
+             "DejaVu Sans Mono", "Courier New", monospace;
+  --xo-fs:   14px;
+  --xo-lh:   1.35;
+  --xo-gap:  1ch;
+  --xo-pad:  8px;
+}
+
+/* --- 2. Base ------------------------------------------------------------ */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+/* [hidden] doit l'emporter sur le display d'un composant (flex, grid…) :
+   la règle du navigateur, elle, perd contre n'importe quelle classe. */
+[hidden] { display: none !important; }   /* xo-lint-ignore : doit primer sur tout display */
+
+html { color-scheme: dark; }
+
+body {
+  margin: 0;
+  background: var(--xo-bg);
+  color: var(--xo-fg);
+  font: 400 var(--xo-fs)/var(--xo-lh) var(--xo-font);
+  -webkit-text-size-adjust: 100%;
+  /* Aucun terminal ne fusionne != ou ->. La chasse resterait fixe, mais le
+     rendu s'éloignerait de sa référence — et un diff se lit caractère à
+     caractère. */
+  font-variant-ligatures: none;
+}
+
+h1, h2, h3, p, ul, ol, figure { margin: 0; }
+ul, ol { padding: 0; list-style: none; }
+img, svg { max-width: 100%; height: auto; }
+input, button, textarea, select { font: inherit; color: inherit; }
+:focus-visible { outline: 1px solid var(--xo-accent); outline-offset: -2px; }
+
+a { color: var(--xo-accent); text-decoration: none; }
+a:hover, a:focus-visible { text-decoration: underline; }
+
+hr { border: 0; border-top: 1px solid var(--xo-rule); margin: var(--xo-pad) 0; }
+
+/* --- 3. Mise en page ---------------------------------------------------- */
+
+.xo-app  { min-height: 100vh; display: flex; flex-direction: column; }
+/* Marge haute doublée : le titre du premier panneau remonte dans sa bordure et
+   viendrait sinon toucher la barre qui le précède. */
+.xo-main { flex: 1; padding: calc(var(--xo-pad) * 2) var(--xo-pad); min-height: 0; }
+
+/* Interligne double en vertical : les titres et compteurs de panneau vivent
+   dans la bordure et débordent de part et d'autre. */
+.xo-grid { display: grid; gap: calc(var(--xo-pad) * 2) var(--xo-pad); grid-template-columns: repeat(12, 1fr); }
+.xo-col-2  { grid-column: span 2; }  .xo-col-3  { grid-column: span 3; }
+.xo-col-4  { grid-column: span 4; }  .xo-col-5  { grid-column: span 5; }
+.xo-col-6  { grid-column: span 6; }  .xo-col-8  { grid-column: span 8; }
+.xo-col-9  { grid-column: span 9; }  .xo-col-12 { grid-column: span 12; }
+
+.xo-row   { display: flex; gap: var(--xo-gap); align-items: center; flex-wrap: wrap; }
+.xo-stack { display: flex; flex-direction: column; gap: calc(var(--xo-pad) * 2); }
+.xo-stack--tight { gap: var(--xo-pad); }   /* à l'intérieur d'un panneau */
+.xo-spacer{ flex: 1; }
+
+/* --- 4. Panneau --------------------------------------------------------- */
+
+.xo-panel {
+  position: relative;
+  background: var(--xo-panel);
+  border: 1px solid var(--xo-border);
+  padding: calc(var(--xo-pad) + 2px) 0 var(--xo-pad);   /* listes et tableaux à fleur de bord */
+  min-width: 0;
+}
+.xo-panel--active { border-color: var(--xo-accent); }
+.xo-panel--pad    { padding-left: var(--xo-gap); padding-right: var(--xo-gap); }
+
+/* Un panneau ne défile JAMAIS lui-même : son titre et son compteur débordent
+   de la bordure, et le moindre overflow les couperait en deux. C'est ce corps
+   qui défile — hauteur via --xo-max-h, ou une hauteur donnée au panneau. */
+.xo-panel__body {
+  overflow: auto;
+  max-height: var(--xo-max-h, none);
+  min-height: 0;
+}
+
+.xo-panel__title,
+.xo-panel__count {
+  position: absolute;
+  background: var(--xo-panel);
+  padding: 0 .5ch;
+  font-size: inherit;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+.xo-panel__title { top: 0; left: var(--xo-gap); transform: translateY(-50%); color: var(--xo-muted); }
+.xo-panel__count { bottom: 0; right: var(--xo-gap); transform: translateY(50%); color: var(--xo-faint); font-weight: 400; }
+.xo-panel--active .xo-panel__title { color: var(--xo-accent); }
+
+/* --- 5. Liste / arbre --------------------------------------------------- */
+
+.xo-list { margin: 0; }
+.xo-panel--pad .xo-list { margin: 0 calc(var(--xo-gap) * -1); }
+
+.xo-list__item {
+  display: flex;
+  gap: var(--xo-gap);
+  align-items: baseline;
+  padding: 2px var(--xo-gap);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.xo-list__item:hover { background: var(--xo-subtle); }
+.xo-list__item[aria-selected="true"] {
+  background: var(--xo-accent);
+  color: var(--xo-inverse);
+  font-weight: 700;
+}
+.xo-list__item[aria-selected="true"] * { color: inherit; }
+.xo-list__item[aria-disabled="true"] { color: var(--xo-faint); cursor: not-allowed; }
+
+/* C'est le libellé qui se tronque, jamais la méta : sans min-width: 0 un enfant
+   flex refuse de rétrécir sous son contenu et pousse la méta hors du cadre. */
+.xo-list__item > * { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.xo-list__icon { flex: none; color: var(--xo-muted); }
+.xo-list__meta { flex: none; margin-left: auto; color: var(--xo-muted); padding-left: 2ch; }
+
+.xo-list--tree .xo-list__item { padding-left: calc(var(--xo-gap) + var(--xo-depth, 0) * 2ch); }
+
+/* --- 6. Onglets --------------------------------------------------------- */
+
+.xo-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--xo-border);
+  margin-bottom: var(--xo-pad);
+  overflow-x: auto;
+}
+.xo-tabs__tab {
+  padding: var(--xo-pad) calc(var(--xo-gap) * 2);
+  background: none;
+  border: 0;
+  color: var(--xo-muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.xo-tabs__tab:hover { background: var(--xo-subtle); color: var(--xo-fg); }
+.xo-tabs__tab[aria-selected="true"] {
+  background: var(--xo-raise);
+  color: var(--xo-fg);
+  font-weight: 700;
+}
+.xo-tabpanel { min-width: 0; }
+
+/* --- 7. Tableau --------------------------------------------------------- */
+
+/* L'en-tête collant n'opère que si la hauteur est contrainte :
+   <div class="xo-table-wrap" style="--xo-max-h: 40vh"> */
+.xo-table-wrap { overflow: auto; max-height: var(--xo-max-h, none); }
+
+.xo-table { width: 100%; border-collapse: collapse; white-space: nowrap; }
+
+.xo-table th {
+  position: sticky;
+  top: 0;
+  text-align: left;
+  font-weight: 400;
+  color: var(--xo-muted);
+  background: var(--xo-raise);
+  padding: 2px var(--xo-gap);
+}
+.xo-table td { padding: 2px var(--xo-gap); border-bottom: 1px solid var(--xo-rule); }
+.xo-table tbody tr:nth-child(even) { background: var(--xo-subtle); }
+.xo-table tbody tr:hover           { background: var(--xo-raise); }
+.xo-table tbody tr[aria-selected="true"] {
+  background: var(--xo-accent);
+  color: var(--xo-inverse);
+  font-weight: 700;
+}
+.xo-table tbody tr[aria-selected="true"] td { color: inherit; }
+.xo-num { text-align: right; }
+
+/* --- 8. Boutons --------------------------------------------------------- */
+
+.xo-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--xo-gap);
+  padding: 2px calc(var(--xo-gap) * 2);
+  background: transparent;
+  color: var(--xo-fg);
+  border: 1px solid var(--xo-border);
+  border-radius: 0;
+  cursor: pointer;
+}
+.xo-btn:hover, .xo-btn:focus-visible {
+  background: var(--xo-accent); color: var(--xo-inverse); border-color: var(--xo-accent);
+}
+.xo-btn--primary { border-color: var(--xo-accent); color: var(--xo-accent); }
+.xo-btn--danger  { border-color: var(--xo-danger); color: var(--xo-danger); }
+.xo-btn--danger:hover, .xo-btn--danger:focus-visible {
+  background: var(--xo-danger); color: var(--xo-inverse);
+}
+.xo-btn--ghost { border-color: transparent; }
+.xo-btn[disabled] { color: var(--xo-faint); border-color: var(--xo-rule); cursor: not-allowed; }
+.xo-btn[disabled]:hover { background: transparent; }
+
+/* --- 9. Formulaire ------------------------------------------------------ */
+
+.xo-field { display: flex; flex-direction: column; gap: 2px; margin-bottom: var(--xo-pad); }
+.xo-label { color: var(--xo-muted); }
+
+.xo-input, .xo-select, .xo-textarea {
+  background: var(--xo-bg);
+  color: var(--xo-fg);
+  border: 1px solid var(--xo-border);
+  border-radius: 0;
+  padding: 2px var(--xo-gap);
+  width: 100%;
+}
+.xo-input:focus, .xo-select:focus, .xo-textarea:focus {
+  border-color: var(--xo-accent); outline: none;
+}
+.xo-textarea { resize: vertical; min-height: 6em; }
+.xo-input::placeholder, .xo-textarea::placeholder { color: var(--xo-faint); }
+.xo-input[aria-invalid="true"] { border-color: var(--xo-danger); }
+.xo-hint  { color: var(--xo-muted); }   /* aide d'un champ — la modale, c'est xo-help */
+.xo-error { color: var(--xo-danger); }
+
+.xo-check { display: flex; gap: var(--xo-gap); align-items: baseline; cursor: pointer; }
+.xo-check input { accent-color: var(--xo-accent); }
+
+/* --- 10. Barres --------------------------------------------------------- */
+
+.xo-statusbar {
+  display: flex;
+  gap: calc(var(--xo-gap) * 2);
+  flex-wrap: wrap;
+  align-items: center;
+  background: var(--xo-raise);
+  border-bottom: 1px solid var(--xo-border);
+  padding: 2px var(--xo-gap);
+}
+.xo-statusbar__label { color: var(--xo-muted); }
+
+.xo-keys {
+  display: flex;
+  gap: calc(var(--xo-gap) * 2);
+  flex-wrap: wrap;
+  background: var(--xo-raise);
+  border-top: 1px solid var(--xo-border);
+  padding: 2px var(--xo-gap);
+  color: var(--xo-muted);
+  font-size: .85em;
+}
+.xo-keys kbd { color: var(--xo-accent); font: inherit; font-weight: 700; }
+
+/* --- 11. Badges, jauges, sparkline -------------------------------------- */
+
+.xo-badge {
+  display: inline-block;
+  padding: 0 .5ch;
+  border: 1px solid currentColor;
+  color: var(--xo-muted);
+  white-space: nowrap;
+}
+.xo-badge--success { color: var(--xo-success); }
+.xo-badge--warning { color: var(--xo-warning); }
+.xo-badge--danger  { color: var(--xo-danger); }
+.xo-badge--info    { color: var(--xo-info); }
+
+/* --solid se combine avec une variante : class="xo-badge xo-badge--solid xo-badge--danger" */
+.xo-badge--solid                    { background: var(--xo-muted);   color: var(--xo-inverse); border-color: transparent; }
+.xo-badge--solid.xo-badge--success  { background: var(--xo-success); color: var(--xo-inverse); }
+.xo-badge--solid.xo-badge--warning  { background: var(--xo-warning); color: var(--xo-inverse); }
+.xo-badge--solid.xo-badge--danger   { background: var(--xo-danger);  color: var(--xo-inverse); }
+.xo-badge--solid.xo-badge--info     { background: var(--xo-info);    color: var(--xo-inverse); }
+
+/* Jauge et progression sont le même objet : voir xo-progress (§18). */
+
+.xo-spark { letter-spacing: -.05em; color: var(--xo-info); }
+
+/* --- 11 bis. Éditeur ---------------------------------------------------- */
+
+/* La gouttière et la zone de saisie défilent ensemble : c'est le conteneur
+   qui défile, pas la <textarea>. Sans cela il faudrait synchroniser deux
+   défilements en JavaScript pour que les numéros restent en face des lignes.
+   La zone doit donc être aussi haute que son contenu : rows = nombre de
+   lignes, et wrap="off" pour qu'une ligne reste une ligne. */
+.xo-editor {
+  display: flex;
+  align-items: flex-start;
+  overflow: auto;
+  max-height: var(--xo-max-h, none);
+  line-height: var(--xo-lh);
+}
+.xo-editor__gutter {
+  flex: none;
+  padding: 0 var(--xo-gap);
+  text-align: right;
+  color: var(--xo-faint);
+  background: var(--xo-panel);
+  border-right: 1px solid var(--xo-rule);
+  user-select: none;
+  white-space: pre;
+}
+.xo-editor__area {
+  flex: 1;
+  min-width: 0;
+  padding: 0 var(--xo-gap);
+  border: 0;
+  outline: none;
+  resize: none;
+  overflow: hidden;
+  background: var(--xo-bg);
+  color: var(--xo-fg);
+  font: inherit;
+  line-height: inherit;
+  white-space: pre;
+}
+.xo-editor__area::selection { background: var(--xo-accent); color: var(--xo-inverse); }
+
+/* Un bloc préformaté posé dans l'éditeur garderait son interligne de 1.2 :
+   l'écart avec la gouttière se cumulerait ligne après ligne. Son padding
+   vertical décalerait la première ligne d'un demi-cran. */
+.xo-editor .xo-pre {
+  line-height: inherit;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+/* --- 12. Code, terminal, diff ------------------------------------------- */
+
+.xo-pre {
+  margin: 0;
+  padding: var(--xo-pad) var(--xo-gap);
+  background: var(--xo-panel);
+  border: 1px solid var(--xo-border);
+  line-height: 1.2;
+  overflow-x: auto;
+  white-space: pre;
+  tab-size: 2;
+}
+.xo-pre--terminal { background: var(--xo-term); color: var(--xo-success); }
+
+.xo-diff { line-height: 1.2; overflow-x: auto; }
+.xo-diff__line { display: flex; white-space: pre; }
+.xo-diff__num  { color: var(--xo-faint); padding-right: var(--xo-gap); user-select: none; min-width: 4ch; text-align: right; }
+.xo-diff__line--add { background: var(--xo-add); }
+.xo-diff__line--del { background: var(--xo-del); }
+
+/* --- 13. Modale --------------------------------------------------------- */
+
+.xo-dialog {
+  background: var(--xo-raise);
+  color: var(--xo-fg);
+  border: 1px solid var(--xo-accent);
+  border-radius: 0;
+  padding: var(--xo-pad) var(--xo-gap);
+  min-width: min(48ch, 90vw);
+  font: inherit;
+}
+.xo-dialog::backdrop { background: var(--xo-scrim); }
+.xo-dialog__title { color: var(--xo-accent); font-weight: 700; margin-bottom: var(--xo-pad); }
+.xo-dialog__actions { display: flex; gap: var(--xo-gap); justify-content: flex-end; margin-top: var(--xo-pad); }
+
+/* La sévérité colore le titre et la bordure, jamais le fond : un aplat rouge
+   sur toute une boîte rend son texte pénible à lire. */
+.xo-dialog--success { border-color: var(--xo-success); }
+.xo-dialog--warning { border-color: var(--xo-warning); }
+.xo-dialog--danger  { border-color: var(--xo-danger); }
+.xo-dialog--success .xo-dialog__title { color: var(--xo-success); }
+.xo-dialog--warning .xo-dialog__title { color: var(--xo-warning); }
+.xo-dialog--danger  .xo-dialog__title { color: var(--xo-danger); }
+
+.xo-dialog--narrow { min-width: min(40ch, 90vw); }
+.xo-dialog--wide   { min-width: min(96ch, 92vw); }
+
+/* Le corps défile, jamais la boîte : titre et actions restent visibles quelle
+   que soit la longueur du contenu. Colonne posée sur [open] seulement — un
+   display sur .xo-dialog écraserait le display: none d'une boîte fermée. */
+.xo-dialog { max-height: calc(100vh - 4em); }
+.xo-dialog[open] { display: flex; flex-direction: column; }
+/* Le formulaire est souvent l'unique enfant : il doit relayer la colonne. */
+.xo-dialog[open] > form { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+.xo-dialog__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  /* Vertical seulement : une largeur libre empêcherait les libellés de se
+     tronquer. Ce qui doit défiler à l'horizontale porte déjà son propre
+     conteneur — xo-pre, xo-diff, xo-table-wrap. */
+  overflow-y: auto;
+  overflow-x: hidden;
+  max-height: var(--xo-max-h, none);
+}
+
+.xo-dialog--full {
+  width: 100vw; max-width: 100vw;
+  height: 100vh; max-height: 100vh;
+  margin: 0; border: 0;
+}
+
+/* Ligne d'actions au clavier, façon BIOS : la touche précède le libellé. */
+.xo-dialog__keys { display: flex; gap: calc(var(--xo-gap) * 2); flex-wrap: wrap; }
+.xo-dialog__keys kbd { color: var(--xo-accent); font: inherit; font-weight: 700; }
+
+/* --- 14. Navigation ----------------------------------------------------- */
+
+.xo-nav {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--xo-gap) * 2);
+  flex-wrap: wrap;
+  background: var(--xo-panel);
+  border-bottom: 1px solid var(--xo-border);
+  padding: var(--xo-pad) var(--xo-gap);
+}
+.xo-nav__brand { font-weight: 700; color: var(--xo-accent); text-decoration: none; }
+/* Sous-barre : même mécanique, poids visuel moindre. */
+.xo-nav--sub {
+  background: var(--xo-bg);
+  border-bottom: 1px solid var(--xo-rule);
+  padding: 2px var(--xo-gap);
+  gap: var(--xo-gap);
+}
+.xo-nav__list  { display: flex; gap: 0; flex-wrap: wrap; }
+.xo-nav__link {
+  display: block;
+  padding: 2px var(--xo-gap);
+  color: var(--xo-muted);
+  text-decoration: none;
+}
+.xo-nav__link:hover, .xo-nav__link:focus-visible {
+  background: var(--xo-subtle); color: var(--xo-fg); text-decoration: none;
+}
+.xo-nav__link[aria-current="page"] {
+  background: var(--xo-accent); color: var(--xo-inverse); font-weight: 700;
+}
+
+/* Barre à part entière : sa place est sous la nav, pas dedans. */
+.xo-breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  padding: 2px var(--xo-gap);
+  background: var(--xo-bg);
+  border-bottom: 1px solid var(--xo-rule);
+  color: var(--xo-muted);
+}
+.xo-breadcrumb a { color: var(--xo-info); }
+.xo-breadcrumb__sep { color: var(--xo-faint); padding: 0 .25ch; }
+.xo-breadcrumb [aria-current="page"] { color: var(--xo-fg); font-weight: 700; }
+
+/* --- 15. Barre d'outils, pagination ------------------------------------- */
+
+.xo-toolbar {
+  display: flex;
+  gap: var(--xo-gap);
+  align-items: center;
+  flex-wrap: wrap;
+  padding: var(--xo-pad) var(--xo-gap);
+  border-bottom: 1px solid var(--xo-rule);
+}
+.xo-toolbar__sep { width: 1px; align-self: stretch; background: var(--xo-rule); }
+
+.xo-btn-group { display: inline-flex; }
+.xo-btn-group .xo-btn + .xo-btn { margin-left: -1px; }
+.xo-btn-group .xo-btn:hover,
+.xo-btn-group .xo-btn:focus-visible,
+.xo-btn-group .xo-btn[aria-pressed="true"] { position: relative; z-index: 1; }
+.xo-btn[aria-pressed="true"] {
+  background: var(--xo-accent); color: var(--xo-inverse); border-color: var(--xo-accent);
+}
+
+.xo-pagination { display: flex; gap: var(--xo-gap); align-items: center; justify-content: center; }
+.xo-pagination__info { color: var(--xo-muted); padding: 0 var(--xo-gap); }
+
+/* --- 16. Alerte, clé-valeur, état vide ---------------------------------- */
+
+.xo-alert {
+  display: flex;
+  gap: var(--xo-gap);
+  align-items: baseline;
+  padding: var(--xo-pad) var(--xo-gap);
+  border: 1px solid currentColor;
+  color: var(--xo-info);
+}
+.xo-alert__body  { color: var(--xo-fg); flex: 1; min-width: 0; }
+.xo-alert__title { font-weight: 700; color: inherit; }
+.xo-alert--success { color: var(--xo-success); }
+.xo-alert--warning { color: var(--xo-warning); }
+.xo-alert--danger  { color: var(--xo-danger); }
+
+.xo-kv__row { display: flex; align-items: baseline; gap: var(--xo-gap); }
+.xo-kv dt   { color: var(--xo-muted); white-space: nowrap; }
+/* La clé ne se coupe jamais ; la valeur, si : nowrap la faisait déborder du
+   panneau sans prévenir dès qu'elle dépassait une ligne. */
+.xo-kv dd   { margin: 0; min-width: 0; text-align: right; overflow-wrap: anywhere; }
+.xo-kv__leader {
+  flex: 1;
+  min-width: 2ch;
+  border-bottom: 1px dotted var(--xo-faint);
+  transform: translateY(-.3em);
+}
+
+/* État d'écran : le vide, l'erreur ou l'attente à l'échelle de la page.
+   xo-empty fait la même chose dans un panneau — celui-ci occupe la vue. */
+.xo-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--xo-pad);
+  min-height: var(--xo-min-h, 50vh);
+  padding: calc(var(--xo-pad) * 3) var(--xo-gap);
+  text-align: center;
+}
+.xo-state__code  { font-size: 3em; line-height: 1; font-weight: 700; color: var(--xo-faint); }
+.xo-state__art   { white-space: pre; line-height: 1.1; color: var(--xo-faint);
+                   max-width: 100%; overflow-x: auto; overflow-y: hidden; }
+.xo-state__title { font-weight: 700; }
+.xo-state__msg   { color: var(--xo-muted); max-width: 60ch; }
+
+.xo-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--xo-pad);
+  padding: calc(var(--xo-pad) * 3) var(--xo-gap);
+  text-align: center;
+}
+.xo-empty__art { white-space: pre; line-height: 1.2; color: var(--xo-faint); }
+.xo-empty__msg { color: var(--xo-muted); }
+
+/* --- 17. Menu déroulant, recherche -------------------------------------- */
+
+/* Sur <details> : fonctionne sans JS. Le JS n'ajoute que Échap et clic extérieur. */
+.xo-dropdown { position: relative; display: inline-block; }
+.xo-dropdown > summary { list-style: none; cursor: pointer; }
+.xo-dropdown > summary::-webkit-details-marker { display: none; }
+
+.xo-dropdown__menu {
+  position: absolute;
+  z-index: 100;
+  top: calc(100% + 1px);
+  left: 0;
+  min-width: 22ch;
+  background: var(--xo-raise);
+  border: 1px solid var(--xo-border);
+  padding: 2px 0;
+}
+.xo-dropdown__menu--right { left: auto; right: 0; }
+
+.xo-dropdown__item {
+  display: flex;
+  gap: var(--xo-gap);
+  align-items: baseline;
+  width: 100%;
+  padding: 2px var(--xo-gap);
+  background: none;
+  border: 0;
+  color: var(--xo-fg);
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.xo-dropdown__item:hover, .xo-dropdown__item:focus-visible {
+  background: var(--xo-accent); color: var(--xo-inverse); text-decoration: none;
+}
+.xo-dropdown__item[aria-disabled="true"] { color: var(--xo-faint); cursor: not-allowed; }
+.xo-dropdown__item[aria-disabled="true"]:hover { background: none; color: var(--xo-faint); }
+.xo-dropdown__key { margin-left: auto; padding-left: 2ch; color: var(--xo-faint); }
+.xo-dropdown__item:hover .xo-dropdown__key { color: inherit; }
+.xo-dropdown__sep { height: 1px; background: var(--xo-rule); margin: 2px 0; }
+
+/* Menu contextuel — même vocabulaire que le menu déroulant, mais posé au
+   curseur plutôt que sous un bouton. Le module lui écrit `left`/`top` et le
+   rabat quand il déborde ; la feuille ne peut pas connaître la position d'un
+   clic. */
+.xo-menu {
+  position: fixed;
+  z-index: 200;
+  min-width: 24ch;
+  background: var(--xo-raise);
+  border: 1px solid var(--xo-border);
+  padding: 2px 0;
+}
+.xo-menu[hidden] { display: none; }
+
+/* L'intitulé de ce sur quoi on a cliqué : un menu contextuel sans rappel de sa
+   cible laisse un doute dès qu'une liste est longue. */
+.xo-menu__titre {
+  padding: 2px var(--xo-gap);
+  color: var(--xo-muted);
+  border-bottom: 1px solid var(--xo-rule);
+  margin-bottom: 2px;
+  max-width: 48ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.xo-menu__item {
+  display: flex;
+  gap: var(--xo-gap);
+  align-items: baseline;
+  width: 100%;
+  padding: 2px var(--xo-gap);
+  background: none;
+  border: 0;
+  color: var(--xo-fg);
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.xo-menu__item:hover, .xo-menu__item:focus-visible {
+  background: var(--xo-accent); color: var(--xo-inverse); text-decoration: none;
+}
+.xo-menu__item[aria-disabled="true"] { color: var(--xo-faint); cursor: not-allowed; }
+.xo-menu__item[aria-disabled="true"]:hover { background: none; color: var(--xo-faint); }
+.xo-menu__sep { height: 1px; background: var(--xo-rule); margin: 2px 0; }
+
+.xo-search {
+  display: flex;
+  align-items: center;
+  background: var(--xo-bg);
+  border: 1px solid var(--xo-border);
+}
+.xo-search:focus-within { border-color: var(--xo-accent); }
+.xo-search__prefix { padding: 0 .5ch 0 var(--xo-gap); color: var(--xo-accent); font-weight: 700; }
+.xo-search input {
+  flex: 1; min-width: 0;
+  padding: 2px var(--xo-gap) 2px 0;
+  background: none; border: 0; outline: none;
+}
+.xo-search input::placeholder { color: var(--xo-faint); }
+.xo-mark { background: var(--xo-warning); color: var(--xo-inverse); }
+
+/* --- 18. Métrique, progression, journal --------------------------------- */
+
+.xo-stat { display: flex; flex-direction: column; }
+.xo-stat__value { font-size: 2em; line-height: 1.1; font-weight: 700; }
+.xo-stat__label { color: var(--xo-muted); }
+.xo-stat__delta { color: var(--xo-muted); }
+.xo-stat__delta--up   { color: var(--xo-success); }
+.xo-stat__delta--down { color: var(--xo-danger); }
+
+.xo-progress { display: flex; gap: var(--xo-gap); align-items: center; }
+.xo-progress__label { color: var(--xo-muted); min-width: 9ch; }
+.xo-progress__track {
+  position: relative;
+  flex: 1;
+  min-width: 8ch;
+  height: 1em;
+  background: var(--xo-subtle);
+  border: 1px solid var(--xo-border);
+  overflow: hidden;
+}
+.xo-progress__fill { height: 100%; background: var(--xo-accent); }
+/* Découpe la barre en cellules d'un caractère : rendu « ████░░░░ » */
+.xo-progress__track::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    90deg, transparent 0 calc(1ch - 1px), var(--xo-panel) calc(1ch - 1px) 1ch);
+  pointer-events: none;
+}
+.xo-progress__value { color: var(--xo-muted); min-width: 5ch; text-align: right; }
+.xo-progress--success .xo-progress__fill { background: var(--xo-success); }
+.xo-progress--warning .xo-progress__fill { background: var(--xo-warning); }
+.xo-progress--danger  .xo-progress__fill { background: var(--xo-danger); }
+
+.xo-spinner { color: var(--xo-accent); }
+/* Quadrants plutôt que braille : JetBrains Mono n'a pas les points braille,
+   ils tombaient sur une police de secours et sortaient de la chasse. */
+.xo-spinner::after { content: "▖"; animation: xo-spin 800ms steps(1) infinite; }
+@keyframes xo-spin {
+  0%  { content: "▖"; } 25% { content: "▘"; }
+  50% { content: "▝"; } 75% { content: "▗"; }
+}
+
+.xo-log { overflow: auto; max-height: var(--xo-max-h, none); line-height: 1.2; }
+.xo-log__line { display: flex; gap: var(--xo-gap); padding: 0 var(--xo-gap); }
+.xo-log__line:hover { background: var(--xo-subtle); }
+.xo-log__time  { color: var(--xo-faint); white-space: nowrap; }
+.xo-log__level { width: 5ch; flex: none; color: var(--xo-muted); text-transform: uppercase; }
+.xo-log__msg   { min-width: 0; overflow-wrap: anywhere; }
+.xo-log__line--ok    .xo-log__level { color: var(--xo-success); }
+.xo-log__line--warn  .xo-log__level { color: var(--xo-warning); }
+.xo-log__line--error .xo-log__level { color: var(--xo-danger); }
+.xo-log__line--info  .xo-log__level { color: var(--xo-info); }
+
+/* --- 19. Accordéon, étiquettes, fieldset -------------------------------- */
+
+.xo-accordion > summary {
+  display: flex;
+  gap: var(--xo-gap);
+  align-items: baseline;
+  padding: 2px var(--xo-gap);
+  cursor: pointer;
+  list-style: none;
+}
+.xo-accordion > summary::-webkit-details-marker { display: none; }
+.xo-accordion > summary::before { content: "▸"; color: var(--xo-muted); }
+.xo-accordion[open] > summary::before { content: "▾"; }
+.xo-accordion > summary:hover { background: var(--xo-subtle); }
+.xo-accordion__body { padding: var(--xo-pad) var(--xo-gap) var(--xo-pad) 2ch; }
+
+.xo-tag {
+  display: inline-flex;
+  gap: .5ch;
+  align-items: baseline;
+  padding: 0 .5ch;
+  background: var(--xo-subtle);
+  color: var(--xo-muted);
+}
+.xo-tag--accent  { color: var(--xo-accent); }
+.xo-tag--success { color: var(--xo-success); }
+.xo-tag--warning { color: var(--xo-warning); }
+.xo-tag--danger  { color: var(--xo-danger); }
+.xo-tag__remove {
+  background: none; border: 0; padding: 0; cursor: pointer;
+  color: var(--xo-faint); line-height: 1;
+}
+.xo-tag__remove:hover, .xo-tag__remove:focus-visible { color: var(--xo-danger); }
+
+.xo-fieldset {
+  border: 1px solid var(--xo-border);
+  padding: var(--xo-pad) var(--xo-gap);
+  margin: 0;
+  min-width: 0;
+}
+.xo-fieldset > legend {
+  padding: 0 .5ch;
+  margin-left: calc(var(--xo-gap) - .5ch);
+  color: var(--xo-muted);
+  font-weight: 700;
+}
+
+/* --- 20. Palette de commandes, aide ------------------------------------- */
+
+.xo-palette {
+  width: min(76ch, 92vw);
+  margin-top: 12vh;
+  padding: 0;
+  background: var(--xo-raise);
+  border: 1px solid var(--xo-accent);
+  border-radius: 0;
+  color: var(--xo-fg);
+  font: inherit;
+}
+.xo-palette::backdrop { background: var(--xo-scrim); }
+.xo-palette .xo-search { border: 0; border-bottom: 1px solid var(--xo-border); background: none; }
+/* Un lien, pour que Entrée et le clic naviguent sans une ligne de JS. */
+.xo-palette__label {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  color: inherit; text-decoration: none;
+}
+.xo-palette__label:hover, .xo-palette__label:focus-visible { text-decoration: none; }
+.xo-palette__list  { max-height: 40vh; overflow: auto; }
+.xo-palette__empty { padding: var(--xo-pad) var(--xo-gap); color: var(--xo-muted); }
+.xo-palette .xo-keys { border-top: 1px solid var(--xo-border); border-bottom: 0; }
+
+.xo-help {
+  width: min(88ch, 92vw);
+  background: var(--xo-raise);
+  border: 1px solid var(--xo-accent);
+  border-radius: 0;
+  color: var(--xo-fg);
+  padding: var(--xo-pad) var(--xo-gap);
+  font: inherit;
+}
+.xo-help::backdrop { background: var(--xo-scrim); }
+.xo-help__title { color: var(--xo-accent); font-weight: 700; margin-bottom: var(--xo-pad); }
+.xo-help__grid  { display: grid; grid-template-columns: 12ch 1fr; gap: 2px var(--xo-gap); }
+.xo-help__grid dt { color: var(--xo-accent); font-weight: 700; text-align: right; }
+.xo-help__grid dd { margin: 0; color: var(--xo-muted); }
+/* text-align: left explicite : l'intitulé de groupe est un dt, il hériterait
+   sinon de l'alignement à droite des touches. */
+.xo-help__group {
+  grid-column: 1 / -1;
+  text-align: left;
+  color: var(--xo-faint);
+  margin-top: var(--xo-pad);
+}
+
+/* --- 21. Notifications, infobulle --------------------------------------- */
+
+.xo-toasts {
+  position: fixed;
+  right: var(--xo-pad);
+  bottom: var(--xo-pad);
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: var(--xo-pad);
+  width: min(56ch, 92vw);
+}
+.xo-toast {
+  display: flex;
+  gap: var(--xo-gap);
+  align-items: baseline;
+  padding: var(--xo-pad) var(--xo-gap);
+  background: var(--xo-raise);
+  border: 1px solid currentColor;
+  color: var(--xo-info);
+}
+.xo-toast__body  { flex: 1; min-width: 0; color: var(--xo-fg); }
+.xo-toast__title { font-weight: 700; color: inherit; }
+.xo-toast__close { background: none; border: 0; padding: 0; color: var(--xo-faint); cursor: pointer; }
+.xo-toast__close:hover, .xo-toast__close:focus-visible { color: var(--xo-fg); }
+.xo-toast--success { color: var(--xo-success); }
+.xo-toast--warning { color: var(--xo-warning); }
+.xo-toast--danger  { color: var(--xo-danger); }
+
+[data-xo-tip] { position: relative; }
+[data-xo-tip]:hover::after,
+[data-xo-tip]:focus-visible::after {
+  content: attr(data-xo-tip);
+  position: absolute;
+  bottom: calc(100% + 2px);
+  left: 0;
+  z-index: 100;
+  padding: 0 .5ch;
+  background: var(--xo-raise);
+  border: 1px solid var(--xo-border);
+  color: var(--xo-fg);
+  white-space: pre;
+  font-weight: 400;
+}
+
+/* --- 22. Formulaire : interrupteur, radio, curseur, fichier ------------- */
+
+/* La case native est un rectangle arrondi bleu : elle jure avec le reste.
+   Elle reste la source de vérité (focus, état, soumission), mais devient
+   invisible ; c'est le label qui dessine [ ] / [x] et ( ) / (•).
+   Le marqueur est un ::before du label, donc aucun élément à ajouter. */
+.xo-check, .xo-radio {
+  display: inline-flex;
+  gap: var(--xo-gap);
+  align-items: baseline;
+  cursor: pointer;
+}
+.xo-check input, .xo-radio input {
+  position: absolute; width: 1px; height: 1px; opacity: 0;
+}
+.xo-check::before { content: "[ ]"; color: var(--xo-muted); }
+.xo-radio::before { content: "( )"; color: var(--xo-muted); }
+.xo-check:has(input:checked)::before { content: "[x]"; color: var(--xo-success); }
+.xo-radio:has(input:checked)::before { content: "(•)"; color: var(--xo-accent); }
+.xo-check:has(input:focus-visible)::before,
+.xo-radio:has(input:focus-visible)::before { outline: 1px solid var(--xo-accent); }
+.xo-check:has(input:disabled), .xo-radio:has(input:disabled) {
+  color: var(--xo-faint); cursor: not-allowed;
+}
+
+.xo-range { display: flex; gap: var(--xo-gap); align-items: center; }
+.xo-range input[type="range"] { flex: 1; min-width: 8ch; accent-color: var(--xo-accent); }
+.xo-range__value { min-width: 5ch; text-align: right; color: var(--xo-muted); }
+
+.xo-file { display: flex; gap: var(--xo-gap); align-items: center; }
+.xo-file input[type="file"] { color: var(--xo-muted); min-width: 0; }
+.xo-file input[type="file"]::file-selector-button {
+  font: inherit;
+  padding: 2px calc(var(--xo-gap) * 2);
+  margin-right: var(--xo-gap);
+  background: transparent;
+  color: var(--xo-fg);
+  border: 1px solid var(--xo-border);
+  border-radius: 0;
+  cursor: pointer;
+}
+.xo-file input[type="file"]::file-selector-button:hover {
+  background: var(--xo-accent); color: var(--xo-inverse); border-color: var(--xo-accent);
+}
+
+.xo-field--inline { flex-direction: row; align-items: baseline; gap: var(--xo-gap); }
+.xo-field--inline .xo-label { min-width: 16ch; flex: none; }
+
+/* --- 23. Colonne latérale, menus, pied ---------------------------------- */
+
+.xo-layout  { display: flex; flex: 1; min-height: 0; }
+/* Contre une colonne latérale, 8px collent le texte à la bordure. */
+.xo-layout > .xo-main { padding-left: calc(var(--xo-gap) * 2); }
+.xo-sidebar {
+  flex: none;
+  width: 24ch;
+  background: var(--xo-panel);
+  border-right: 1px solid var(--xo-border);
+  padding: var(--xo-pad) 0;
+  overflow: auto;
+}
+.xo-sidebar__group {
+  padding: 2px var(--xo-gap);
+  margin-top: var(--xo-pad);
+  color: var(--xo-faint);
+  text-transform: uppercase;
+  font-size: .85em;
+}
+.xo-sidebar__link {
+  display: flex; gap: var(--xo-gap); align-items: baseline;
+  padding: 2px var(--xo-gap);
+  color: var(--xo-muted);
+  text-decoration: none;
+}
+.xo-sidebar__link:hover, .xo-sidebar__link:focus-visible {
+  background: var(--xo-subtle); color: var(--xo-fg); text-decoration: none;
+}
+.xo-sidebar__link[aria-current="page"] {
+  background: var(--xo-accent); color: var(--xo-inverse); font-weight: 700;
+}
+
+.xo-menubar { display: flex; flex-wrap: wrap; background: var(--xo-raise); border-bottom: 1px solid var(--xo-border); }
+.xo-menubar__item {
+  display: flex; gap: .5ch; align-items: baseline;
+  padding: 2px calc(var(--xo-gap) * 2);
+  background: none; border: 0;
+  color: var(--xo-fg);
+  cursor: pointer;
+}
+.xo-menubar__item:hover, .xo-menubar__item:focus-visible {
+  background: var(--xo-accent); color: var(--xo-inverse);
+}
+.xo-menubar__key { color: var(--xo-accent); font-weight: 700; }
+.xo-menubar__item:hover .xo-menubar__key { color: inherit; }
+
+.xo-footer {
+  display: flex; flex-wrap: wrap; gap: calc(var(--xo-gap) * 2);
+  padding: var(--xo-pad) var(--xo-gap);
+  border-top: 1px solid var(--xo-rule);
+  color: var(--xo-muted);
+}
+
+/* --- 24. Bannière, filet titré, avatar ---------------------------------- */
+
+.xo-banner {
+  background: var(--xo-panel);
+  border: 1px solid var(--xo-border);
+  padding: var(--xo-pad) var(--xo-gap);
+  text-align: center;
+}
+.xo-banner__art { white-space: pre; line-height: 1.05; color: var(--xo-accent);
+                  overflow-x: auto; overflow-y: hidden; }
+.xo-banner__tagline { color: var(--xo-muted); }
+
+.xo-rule { display: flex; align-items: center; gap: var(--xo-gap); color: var(--xo-muted); }
+.xo-rule::before, .xo-rule::after { content: ""; flex: 1; border-top: 1px solid var(--xo-rule); }
+.xo-rule--start::before { flex: 0 0 2ch; }
+
+/* Réserve une cellule et centre le glyphe : les colonnes restent alignées
+   même quand un élément de la liste n'a pas d'icône. */
+.xo-icon {
+  display: inline-block;
+  flex: none;
+  width: 1ch;
+  text-align: center;
+}
+
+.xo-avatar {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 3ch; height: 1.5em;
+  background: var(--xo-subtle);
+  color: var(--xo-accent);
+  font-weight: 700;
+}
+
+/* --- 25. Chronologie, étapes -------------------------------------------- */
+
+.xo-timeline         { min-width: 0; }
+.xo-timeline__item   { display: flex; gap: var(--xo-gap); }
+.xo-timeline__marker { position: relative; flex: none; width: 2ch; text-align: center; color: var(--xo-accent); }
+.xo-timeline__item:not(:last-child) .xo-timeline__marker::after {
+  content: "";
+  position: absolute; left: 50%; top: 1.5em; bottom: -.3em;
+  border-left: 1px solid var(--xo-rule);
+}
+.xo-timeline__body { padding-bottom: var(--xo-pad); min-width: 0; }
+.xo-timeline__time { color: var(--xo-faint); }
+
+.xo-steps { display: flex; flex-wrap: wrap; align-items: baseline; }
+.xo-steps__step { display: flex; gap: .5ch; padding: 0 var(--xo-gap); color: var(--xo-faint); }
+.xo-steps__step--done { color: var(--xo-success); }
+.xo-steps__step[aria-current="step"] { color: var(--xo-accent); font-weight: 700; }
+.xo-steps__sep { color: var(--xo-faint); }
+
+/* --- 26. Graphe en barres, squelette, invite ---------------------------- */
+
+.xo-bars { display: grid; grid-template-columns: max-content 1fr max-content; gap: 0 var(--xo-gap); }
+.xo-bars__label { color: var(--xo-muted); white-space: nowrap; }
+.xo-bars__bar   { color: var(--xo-accent); overflow: hidden; white-space: nowrap; }
+.xo-bars__value { color: var(--xo-muted); text-align: right; white-space: nowrap; }
+
+.xo-skeleton {
+  display: inline-block;
+  min-width: 8ch;
+  background: var(--xo-subtle);
+  color: transparent;
+  user-select: none;
+  animation: xo-pulse 1.4s steps(2) infinite;
+}
+@keyframes xo-pulse { 50% { background: var(--xo-raise); } }
+
+.xo-prompt { display: flex; gap: var(--xo-gap); align-items: baseline; }
+.xo-prompt__sign { color: var(--xo-success); font-weight: 700; }
+.xo-prompt input {
+  flex: 1; min-width: 0;
+  background: none; border: 0; outline: none; color: var(--xo-fg);
+}
+.xo-cursor::after {
+  content: "▉";
+  color: var(--xo-accent);
+  animation: xo-blink 1s steps(2) infinite;
+}
+@keyframes xo-blink { 50% { opacity: 0; } }
+
+/* --- 26 bis. Calendrier --------------------------------------------------
+   La disposition de `cal` : sept colonnes de trois caractères, le quantième
+   aligné à droite, et le troisième caractère laissé libre — c'est la gouttière
+   où se pose la pastille d'un jour chargé. Les jours hors du mois ne sont pas
+   grisés : ils sont vides, comme dans un terminal.
+
+   Un jour est un <button> ; la grille se navigue avec data-xo-list="grid". */
+
+.xo-cal { display: inline-block; min-width: 0; }
+
+.xo-cal__head { display: flex; align-items: baseline; gap: var(--xo-gap); }
+.xo-cal__month { flex: 1; text-align: center; font-weight: 700; white-space: nowrap; }
+
+.xo-cal__grid { display: grid; grid-template-columns: repeat(7, 3ch); }
+
+.xo-cal__dow {
+  color: var(--xo-muted);
+  text-align: right;
+  padding-right: 1ch;
+  white-space: nowrap;
+}
+
+.xo-cal__day {
+  position: relative;
+  text-align: right;
+  padding: 0 1ch 0 0;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  color: inherit;
+  cursor: pointer;
+}
+.xo-cal__day:hover { background: var(--xo-subtle); }
+/* Aujourd'hui se souligne ; la vidéo inverse est réservée à la sélection, sans
+   quoi les deux états deviennent indiscernables. */
+.xo-cal__day[aria-current="date"] { color: var(--xo-accent); font-weight: 700; text-decoration: underline; }
+.xo-cal__day[aria-selected="true"] { background: var(--xo-accent); color: var(--xo-inverse); font-weight: 700; }
+.xo-cal__day[aria-disabled="true"] { color: var(--xo-faint); cursor: not-allowed; }
+
+/* La pastille tient dans la gouttière du troisième caractère : elle ne pousse
+   donc aucun quantième et la grille reste une grille. */
+.xo-cal__day--event::after {
+  content: "·";
+  position: absolute;
+  right: 0;
+  color: var(--xo-alt);
+}
+.xo-cal__day[aria-selected="true"]::after { color: inherit; }
+
+/* --- 26 ter. Graphe temporel, carte de chaleur ---------------------------
+   Les deux sont du texte, comme le graphe en barres : aucun canvas, aucune
+   dépendance. Le graphe est un <pre> de blocs ▁▂▃▄▅▆▇█ calculé côté serveur —
+   une colonne par point, la rangée du bas remplie la première. La carte de
+   chaleur est une grille de caractères dont la DENSITÉ porte la valeur
+   (· ░ ▒ ▓ █) : elle reste lisible en noir et blanc, et la couleur n'ajoute
+   qu'un second signal. */
+
+.xo-plot { display: grid; grid-template-columns: max-content 1fr; gap: 0 var(--xo-gap); }
+
+/* L'échelle et la zone tracée partagent la rangée de grille : leurs hauteurs
+   sont donc égales, et « space-between » suffit à faire tomber les graduations
+   en face des bonnes lignes. */
+.xo-plot__scale {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  color: var(--xo-muted);
+  text-align: right;
+  white-space: nowrap;
+}
+.xo-plot__area {
+  margin: 0;
+  font: inherit;
+  white-space: pre;
+  overflow: hidden;
+  color: var(--xo-accent);
+}
+.xo-plot--success .xo-plot__area { color: var(--xo-success); }
+.xo-plot--warning .xo-plot__area { color: var(--xo-warning); }
+.xo-plot--danger  .xo-plot__area { color: var(--xo-danger); }
+
+.xo-plot__foot {
+  grid-column: 2;
+  display: flex;
+  gap: var(--xo-gap);
+  color: var(--xo-muted);
+}
+
+.xo-heat { display: inline-block; min-width: 0; }
+.xo-heat__row { display: flex; gap: var(--xo-gap); align-items: baseline; }
+.xo-heat__label {
+  flex: none;
+  min-width: 4ch;
+  text-align: right;
+  color: var(--xo-muted);
+  white-space: nowrap;
+}
+/* Les cellules sont des caractères collés : rien ne doit les séparer, pas même
+   le retour à la ligne du gabarit. Les émettre sans séparateur. */
+.xo-heat__cells { white-space: pre; }
+.xo-heat__cell { color: var(--xo-accent); }
+.xo-heat__cell--0 { color: var(--xo-muted); }
+
+/* Variante à seuils : la couleur double la densité quand on surveille une
+   charge plutôt qu'une activité. */
+.xo-heat--seuils .xo-heat__cell--1 { color: var(--xo-info); }
+.xo-heat--seuils .xo-heat__cell--2 { color: var(--xo-success); }
+.xo-heat--seuils .xo-heat__cell--3 { color: var(--xo-warning); }
+.xo-heat--seuils .xo-heat__cell--4 { color: var(--xo-danger); }
+
+.xo-heat__foot { display: flex; gap: var(--xo-gap); color: var(--xo-muted); }
+
+/* --- 27. Séparateur redimensionnable ------------------------------------ */
+
+.xo-split { display: grid; grid-template-columns: var(--xo-split, 50%) auto 1fr; min-height: 0; }
+.xo-split > * { min-width: 0; }
+.xo-split__handle {
+  width: 1ch; padding: 0; border: 0;
+  background: var(--xo-rule);
+  cursor: col-resize;
+}
+.xo-split__handle:hover, .xo-split__handle:focus-visible { background: var(--xo-accent); }
+
+/* --- 28. Barres de défilement ------------------------------------------- */
+
+* { scrollbar-width: thin; scrollbar-color: var(--xo-border) transparent; }
+::-webkit-scrollbar { width: 1ch; height: 1ch; }
+::-webkit-scrollbar-track { background: var(--xo-panel); }
+::-webkit-scrollbar-thumb { background: var(--xo-border); }
+::-webkit-scrollbar-thumb:hover { background: var(--xo-accent); }
+
+/* --- 29. Texte de lecture ------------------------------------------------ */
+
+/* Le reset supprime les marges : elles reviennent ici, et seulement ici.
+   Largeur mesurée en caractères — la seule zone du framework qui ne remplit
+   pas l'écran, parce qu'au-delà de ~80 signes une ligne devient pénible. */
+.xo-prose { max-width: 80ch; }
+.xo-prose > * + * { margin-top: var(--xo-pad); }
+.xo-prose h1, .xo-prose h2, .xo-prose h3 { font-size: inherit; font-weight: 700; }
+.xo-prose h1 { color: var(--xo-accent); }
+.xo-prose h2, .xo-prose h3 { color: var(--xo-fg); margin-top: calc(var(--xo-pad) * 3); }
+.xo-prose h2::before { content: "## "; color: var(--xo-faint); }
+.xo-prose h3::before { content: "### "; color: var(--xo-faint); }
+.xo-prose ul, .xo-prose ol { padding-left: 3ch; }
+.xo-prose li + li { margin-top: var(--xo-sp-1, 2px); }
+.xo-prose ul > li::marker { content: "- "; color: var(--xo-faint); }
+.xo-prose ol { list-style: decimal; }
+.xo-prose ol > li::marker { color: var(--xo-faint); }
+.xo-prose blockquote {
+  margin: 0;
+  padding-left: 2ch;
+  border-left: 1px solid var(--xo-border);
+  color: var(--xo-muted);
+}
+.xo-prose code { background: var(--xo-subtle); padding: 0 .5ch; color: var(--xo-info); }
+.xo-prose pre code { background: none; padding: 0; color: inherit; }
+.xo-prose table { width: 100%; border-collapse: collapse; }
+.xo-prose th { text-align: left; color: var(--xo-muted); font-weight: 400; }
+.xo-prose th, .xo-prose td { padding: 2px var(--xo-gap); border-bottom: 1px solid var(--xo-rule); }
+
+/* --- 30. Utilitaires ---------------------------------------------------- */
+
+.xo-muted   { color: var(--xo-muted); }
+.xo-faint   { color: var(--xo-faint); }
+.xo-accent  { color: var(--xo-accent); }
+.xo-success { color: var(--xo-success); }
+.xo-warning { color: var(--xo-warning); }
+.xo-danger  { color: var(--xo-danger); }
+.xo-info    { color: var(--xo-info); }
+.xo-special { color: var(--xo-special); }
+.xo-alt     { color: var(--xo-alt); }
+.xo-bold    { font-weight: 700; }
+.xo-right   { text-align: right; }
+.xo-nowrap  { white-space: nowrap; }
+.xo-scroll  { overflow: auto; }
+.xo-sr {
+  position: absolute; width: 1px; height: 1px;
+  padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
+}
+
+/* --- 30 bis. Mode console -------------------------------------------------
+   Une seule classe, `xo-console`, posée sur un conteneur : à l'intérieur, les
+   mêmes composants — même HTML, mêmes data-xo-*, même JS — changent de
+   grammaire. Rien n'est réécrit, tout est retraduit.
+
+   Trois principes :
+
+   1. LA CELLULE. Tout tombe sur une grille de caractères : les hauteurs sont des
+      multiples de --xo-cell, les écarts se comptent en `ch`. C'est ce qui fait
+      qu'un rendu ressemble à un terminal plutôt qu'à du web sombre.
+   2. PAS DE BOÎTE POUR UN CONTRÔLE. Un bouton n'est pas un rectangle : c'est
+      « [ Valider ] », et sa sélection est une vidéo inverse. Un champ n'est pas
+      un cadre : c'est un bloc de saisie. Une case est « [x] », un radio « (•) ».
+      Seuls les CONTENEURS gardent un filet — c'est le trait `─` du terminal, à
+      l'identique : un caractère de dessin de boîte est ce trait d'un pixel.
+   3. LE TEXTE PORTE LA STRUCTURE. Les jonctions du cadre (`┤ Titre ├`), les
+      guides d'arbre (`├─`), la barre de progression (`████░░░░`) sont des
+      caractères, pas des artifices graphiques.
+
+   Le mode s'applique aussi bien à une page entière (`<body class="xo-console">`)
+   qu'à un seul panneau. Voir tui.php. */
+
+.xo-console {
+  /* La cellule : 14px × 1.5 = 21px. Toute hauteur du mode en est un multiple. */
+  --xo-cell: calc(var(--xo-fs) * 1.5);
+  --xo-lh: 1.5;
+  --xo-gap: 1ch;
+  /* --xo-pad n'est PAS remis à zéro ici. La tentation est forte — un terminal
+     compte des caractères, pas des pixels — mais le token sert à une soixantaine
+     de composants, et le mode n'en retraduit qu'une vingtaine. L'écraser
+     tasserait en silence tout ce qu'il ne couvre pas : navigation, palette,
+     aide, modales, notifications, colonne latérale. Chaque composant traduit
+     pose donc son propre rembourrage, explicitement ; les autres gardent le
+     leur et restent lisibles. */
+
+  background: var(--xo-term);
+  color: var(--xo-fg);
+  line-height: var(--xo-lh);
+}
+
+/* Le fond du terminal remonte jusqu'au bord de la fenêtre. */
+.xo-console.xo-app { background: var(--xo-term); }
+.xo-console .xo-main { padding: var(--xo-cell) 1ch; }
+
+/* --- Conteneurs : le filet reste, la grille change ----------------------- */
+
+.xo-console .xo-panel {
+  background: transparent;
+  padding: 0 0 0 0;
+  /* Le titre vit dans le filet du haut : il lui faut une demi-cellule au-dessus
+     du contenu, sans quoi la première ligne le traverse. */
+  padding-top: calc(var(--xo-cell) / 2);
+  padding-bottom: calc(var(--xo-cell) / 2);
+}
+.xo-console .xo-panel--pad { padding-left: 1ch; padding-right: 1ch; }
+
+/* Le titre interrompt le filet : « ──┤ Titre ├── ». Les deux jonctions sont de
+   vrais caractères, de la couleur du filet, pas de celle du titre. */
+.xo-console .xo-panel__title,
+.xo-console .xo-panel__count { background: var(--xo-term); padding: 0; }
+.xo-console .xo-panel__title::before { content: "┤ "; color: var(--xo-border); font-weight: 400; }
+.xo-console .xo-panel__title::after  { content: " ├"; color: var(--xo-border); font-weight: 400; }
+.xo-console .xo-panel__count::before { content: "┤ "; color: var(--xo-border); }
+.xo-console .xo-panel__count::after  { content: " ├"; color: var(--xo-border); }
+
+.xo-console .xo-grid  { gap: var(--xo-cell) 1ch; }
+.xo-console .xo-stack { gap: var(--xo-cell); }
+.xo-console .xo-stack--tight { gap: 0; }
+
+/* --- Boutons : un libellé entre crochets, jamais un rectangle ------------ */
+
+.xo-console .xo-btn {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  height: var(--xo-cell);
+  gap: 1ch;
+}
+/* Les crochets font partie du bouton : c'est le groupe entier « [ Valider ] »
+   qui bascule en vidéo inverse, exactement comme un curses met en surbrillance
+   l'entrée courante. Aucun balisage à ajouter : le bouton existant suffit. */
+.xo-console .xo-btn::before { content: "[ "; color: var(--xo-faint); }
+.xo-console .xo-btn::after  { content: " ]"; color: var(--xo-faint); }
+
+.xo-console .xo-btn:hover,
+.xo-console .xo-btn:focus-visible {
+  background: var(--xo-accent);
+  color: var(--xo-inverse);
+  font-weight: 700;
+}
+.xo-console .xo-btn:hover::before, .xo-console .xo-btn:focus-visible::before,
+.xo-console .xo-btn:hover::after,  .xo-console .xo-btn:focus-visible::after { color: var(--xo-inverse); }
+
+.xo-console .xo-btn--primary { color: var(--xo-accent); }
+.xo-console .xo-btn--primary::before,
+.xo-console .xo-btn--primary::after { color: var(--xo-accent); }
+.xo-console .xo-btn--danger  { color: var(--xo-danger); }
+.xo-console .xo-btn--danger::before,
+.xo-console .xo-btn--danger::after { color: var(--xo-danger); }
+.xo-console .xo-btn--danger:hover,
+.xo-console .xo-btn--danger:focus-visible { background: var(--xo-danger); color: var(--xo-inverse); }
+
+/* Le bouton fantôme perd ses crochets : c'est un mot cliquable, rien de plus. */
+.xo-console .xo-btn--ghost::before,
+.xo-console .xo-btn--ghost::after { content: none; }
+
+/* Le bouton enfoncé (§15) doit être RÉAFFIRMÉ ici : « .xo-console .xo-btn » et
+   « .xo-btn[aria-pressed] » ont la même spécificité, et le mode vient plus bas
+   dans la feuille — sans ces trois lignes, il gagne et l'état enfoncé disparaît.
+   Le chevauchement d'un pixel du groupe, lui, n'a plus de bordure à recouvrir. */
+.xo-console .xo-btn[aria-pressed="true"] { background: var(--xo-accent); color: var(--xo-inverse); }
+.xo-console .xo-btn[aria-pressed="true"]::before,
+.xo-console .xo-btn[aria-pressed="true"]::after { color: var(--xo-inverse); }
+.xo-console .xo-btn-group .xo-btn + .xo-btn { margin-left: 0; }
+
+.xo-console .xo-btn[disabled] { color: var(--xo-faint); }
+.xo-console .xo-btn[disabled]:hover { background: transparent; color: var(--xo-faint); font-weight: 400; }
+
+/* La touche d'accès rapide se souligne, comme dans un menu curses. */
+.xo-console .xo-btn__key { text-decoration: underline; }
+
+/* --- Champs : un bloc de saisie, pas un cadre ---------------------------- */
+
+.xo-console .xo-input,
+.xo-console .xo-select,
+.xo-console .xo-textarea {
+  border: 0;
+  background: var(--xo-subtle);
+  padding: 0 1ch;
+  height: var(--xo-cell);
+}
+.xo-console .xo-textarea { height: auto; padding: 0 1ch; }
+/* Le champ actif passe en vidéo inverse : dans un terminal, c'est la seule
+   manière de dire « le curseur est ici ». */
+.xo-console .xo-input:focus,
+.xo-console .xo-select:focus,
+.xo-console .xo-textarea:focus {
+  background: var(--xo-accent);
+  color: var(--xo-inverse);
+  outline: none;
+}
+.xo-console .xo-input:focus::placeholder,
+.xo-console .xo-textarea:focus::placeholder { color: var(--xo-inverse); }
+.xo-console .xo-input[aria-invalid="true"] { background: var(--xo-del); }
+.xo-console .xo-field { margin-bottom: 0; }
+.xo-console .xo-label::after { content: " :"; color: var(--xo-faint); }
+
+/* Case et radio : RIEN à faire. Le socle les dessine déjà en caractères — « [x] »
+   et « (•) » viennent de xo-check::before / xo-radio::before (§22), la case
+   native étant masquée depuis toujours. Le mode console n'a qu'à ne pas y
+   toucher : ajouter un marqueur ici en afficherait deux. */
+
+/* --- Listes et arbres : la sélection prend la ligne entière -------------- */
+
+.xo-console .xo-list__item {
+  padding: 0 1ch;
+  height: var(--xo-cell);
+  align-items: center;
+}
+.xo-console .xo-list__item:hover { background: var(--xo-raise); }
+.xo-console .xo-list__item[aria-selected="true"] { background: var(--xo-accent); color: var(--xo-inverse); }
+/* Le curseur du terminal : la ligne sélectionnée commence par un chevron. Il est
+   hors du flux — en flux, il deviendrait un enfant flex de plus et décalerait
+   toute la ligne d'un caractère par rapport aux lignes voisines. */
+.xo-console .xo-list__item { position: relative; }
+.xo-console .xo-list__item[aria-selected="true"]::before {
+  content: "▸";
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+
+/* L'arbre garde sa logique : --xo-depth continue d'indenter, data-xo-list
+   continue de naviguer. Le mode console ajoute seulement la possibilité de
+   tracer les branches en caractères — un xo-list__guide dans la ligne. Seul le
+   HTML sait quelle branche se poursuit ; aucune CSS ne peut le deviner. Les
+   deux façons de retraiter se combinent : guides avec --xo-depth: 0, ou
+   retrait calculé sans guide. */
+.xo-console .xo-list__guide { color: var(--xo-faint); white-space: pre; flex: none; }
+.xo-console .xo-list__item[aria-selected="true"] .xo-list__guide { color: inherit; }
+
+/* --- Tableau : en-tête en vidéo inverse, lignes à fleur ------------------ */
+
+.xo-console .xo-table th {
+  background: var(--xo-border);
+  color: var(--xo-fg);
+  font-weight: 700;
+  padding: 0 1ch;
+  height: var(--xo-cell);
+}
+.xo-console .xo-table td { padding: 0 1ch; height: var(--xo-cell); border-bottom: 0; }
+/* Un terminal ne zèbre pas : il n'a que la ligne courante. */
+.xo-console .xo-table tbody tr:nth-child(even) { background: transparent; }
+.xo-console .xo-table tbody tr:hover { background: var(--xo-raise); }
+
+/* --- Onglets : des étiquettes en vidéo inverse --------------------------- */
+
+.xo-console .xo-tabs { gap: 1ch; margin-bottom: 0; }
+.xo-console .xo-tabs__tab { padding: 0 1ch; height: var(--xo-cell); }
+.xo-console .xo-tabs__tab[aria-selected="true"] { background: var(--xo-accent); color: var(--xo-inverse); }
+
+/* --- Barres : la ligne d'état et la ligne de touches -------------------- */
+
+.xo-console .xo-statusbar,
+.xo-console .xo-keys {
+  background: var(--xo-raise);
+  border: 0;
+  padding: 0 1ch;
+  height: var(--xo-cell);
+  align-items: center;
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+.xo-console .xo-keys { font-size: inherit; }
+/* tmux écrit « 1:fichiers » : la touche et son libellé sont soudés. */
+.xo-console .xo-keys kbd { color: var(--xo-inverse); background: var(--xo-accent); padding: 0 .5ch; }
+
+/* --- Indicateurs -------------------------------------------------------- */
+
+/* La jauge est déjà découpée en cellules (§18) : il ne reste qu'à retirer son
+   cadre, le filet du caractère plein suffit. */
+.xo-console .xo-progress__track { border: 0; height: var(--xo-cell); }
+.xo-console .xo-progress__label { min-width: 12ch; }
+
+.xo-console .xo-badge { border: 0; padding: 0; }
+.xo-console .xo-badge::before { content: "["; color: var(--xo-faint); }
+.xo-console .xo-badge::after  { content: "]"; color: var(--xo-faint); }
+.xo-console .xo-badge--solid { padding: 0 .5ch; }
+.xo-console .xo-badge--solid::before,
+.xo-console .xo-badge--solid::after { content: none; }
+
+/* Une métrique de terminal ne grossit pas : elle s'aligne. */
+.xo-console .xo-stat__value { font-size: inherit; line-height: var(--xo-lh); }
+
+.xo-console .xo-log { line-height: var(--xo-lh); }
+
+/* Une hauteur fixe, comme sur xo-list__item, coupe verticalement tout xo-log__msg
+   qui enveloppe — et lui seul a `overflow-wrap: anywhere` en base (§18) : la base
+   prévoit qu'un message dépasse une ligne, min-height le permet enfin ici. */
+.xo-console .xo-log__line { padding: 0 1ch; min-height: var(--xo-cell); align-items: baseline; }
+
+/* Le graphe en barres est déjà du texte (█ ▉ ▊…) : il ne lui manque que la
+   cellule. La sparkline, elle, perd son resserrement — dans un terminal, un
+   caractère occupe une chasse pleine, jamais 95 % d'une chasse. */
+.xo-console .xo-bars { gap: 0 1ch; }
+.xo-console .xo-bars__label,
+.xo-console .xo-bars__bar,
+.xo-console .xo-bars__value { height: var(--xo-cell); line-height: var(--xo-cell); }
+.xo-console .xo-spark { letter-spacing: 0; }
+
+/* Le curseur natif est un rail arrondi avec une pastille ronde : les deux
+   jurent. Il devient un rail d'une cellule et un bloc d'un caractère — le
+   « ▉ » qu'un terminal ferait glisser. */
+.xo-console .xo-range input[type="range"] {
+  appearance: none;
+  height: var(--xo-cell);
+  background: transparent;
+}
+.xo-console .xo-range input[type="range"]::-webkit-slider-runnable-track {
+  height: var(--xo-cell);
+  background: var(--xo-subtle);
+}
+.xo-console .xo-range input[type="range"]::-moz-range-track {
+  height: var(--xo-cell);
+  background: var(--xo-subtle);
+}
+.xo-console .xo-range input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  width: 1ch;
+  height: var(--xo-cell);
+  border: 0;
+  border-radius: 0;
+  background: var(--xo-accent);
+}
+.xo-console .xo-range input[type="range"]::-moz-range-thumb {
+  width: 1ch;
+  height: var(--xo-cell);
+  border: 0;
+  border-radius: 0;
+  background: var(--xo-accent);
+}
+
+/* Graphe et carte de chaleur sont déjà des caractères : il ne leur manque que
+   l'interligne de la cellule, sans quoi leurs rangées ne tombent pas sur la
+   même grille que le reste de l'écran. */
+.xo-console .xo-plot__area,
+.xo-console .xo-plot__scale,
+.xo-console .xo-heat__row { line-height: var(--xo-cell); }
+.xo-console .xo-heat__cells { letter-spacing: 0; }
+
+/* Calendrier : la disposition est déjà celle de `cal`, il ne reste que la
+   hauteur de cellule à imposer. */
+.xo-console .xo-cal__head,
+.xo-console .xo-cal__dow,
+.xo-console .xo-cal__day { height: var(--xo-cell); line-height: var(--xo-cell); }
+
+.xo-console .xo-alert { border: 0; padding: 0 1ch; }
+.xo-console .xo-tag { border: 0; }
+.xo-console .xo-tag::before { content: "<"; color: var(--xo-faint); }
+.xo-console .xo-tag::after  { content: ">"; color: var(--xo-faint); }
+
+/* --- 30 ter. Mode CLI -----------------------------------------------------
+   Même méthode que `xo-console`, autre grammaire. Le mode console simule un
+   ÉCRAN : des panneaux encadrés, une sélection, une grille figée. Le mode CLI
+   simule un FLUX : la sortie de `git status` ou de `npm install`, qui se lit de
+   haut en bas et qu'on ne pilote pas.
+
+   Trois conséquences, et ce sont elles qui font tout le mode :
+
+   1. AUCUN CADRE. Le panneau perd sa bordure ; son titre devient une ligne de
+      section, « ==> Titre ».
+   2. AUCUNE COLONNE. Un flux n'en a qu'une : la grille redevient un empilement
+      et les xo-col-* n'ont plus d'effet. C'est ce qui distingue le plus ce mode
+      du précédent.
+   3. AUCUNE ZONE QUI DÉFILE. Dans un transcrit, rien ne défile en interne :
+      --xo-max-h est neutralisé, tout est déroulé.
+
+   La sélection en vidéo inverse — la signature du framework — n'a pas de sens
+   ici : on ne pointe rien dans un transcrit. Elle devient un simple marqueur de
+   ligne, « * » au lieu de « - ». L'état reste donc perceptible sans couleur.
+
+   Ce que le mode NE touche pas, volontairement : xo-check et xo-radio (le socle
+   les dessine déjà en caractères, §22), et tout ce qu'il ne retraduit pas —
+   modales, palette, aide, notifications gardent leur grammaire. Voir cli.php. */
+
+.xo-cli {
+  --xo-cell: calc(var(--xo-fs) * 1.5);
+  --xo-lh: 1.5;
+  --xo-gap: 1ch;
+  /* Comme pour le mode console : --xo-pad n'est PAS écrasé, sans quoi tout ce
+     que le mode ne couvre pas se tasserait en silence. */
+
+  background: var(--xo-term);
+  color: var(--xo-fg);
+  line-height: var(--xo-lh);
+}
+
+.xo-cli .xo-main { padding: var(--xo-cell) 1ch; }
+
+/* --- Le flux : une colonne, rien qui défile en interne ------------------- */
+
+.xo-cli .xo-grid { display: block; }
+.xo-cli .xo-grid > * + *,
+.xo-cli .xo-panel + .xo-panel { margin-top: var(--xo-cell); }
+.xo-cli .xo-stack { gap: var(--xo-cell); }
+
+.xo-cli .xo-panel__body,
+.xo-cli .xo-log,
+.xo-cli .xo-table-wrap { max-height: none; overflow: visible; }
+
+/* --- Panneau : une ligne de section, pas une boîte ---------------------- */
+
+.xo-cli .xo-panel {
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
+/* Le titre sort de la bordure où il vivait : il redevient une ligne du flux. */
+.xo-cli .xo-panel__title,
+.xo-cli .xo-panel__count {
+  position: static;
+  transform: none;
+  background: transparent;
+  padding: 0;
+  display: block;
+}
+.xo-cli .xo-panel__title { color: var(--xo-accent); }
+.xo-cli .xo-panel__title::before { content: "==> "; }
+/* Le compte se range sous sa section. Le retrait se fait en ch : une suite
+   d'espaces dans un `content` se réduirait à un seul sous white-space: nowrap. */
+.xo-cli .xo-panel__count { color: var(--xo-muted); padding-left: 4ch; }
+
+/* --- Listes : une ligne, un marqueur ------------------------------------ */
+
+.xo-cli .xo-list__item {
+  padding: 0;
+  background: none;
+  height: auto;
+}
+.xo-cli .xo-list__item:hover { background: none; text-decoration: underline; }
+/* La sélection ne s'inverse plus : elle change de marqueur. Le contenu « - »
+   n'a pas d'espace — c'est la gouttière flex de la ligne qui l'apporte, sinon
+   le marqueur serait décalé de deux caractères. */
+.xo-cli .xo-list:not(.xo-list--tree) .xo-list__item::before { content: "-"; color: var(--xo-faint); }
+.xo-cli .xo-list__item[aria-selected="true"] {
+  background: none;
+  color: inherit;
+  font-weight: 700;
+}
+.xo-cli .xo-list:not(.xo-list--tree) .xo-list__item[aria-selected="true"]::before {
+  content: "*";
+  color: var(--xo-accent);
+}
+/* L'arbre garde ses guides : `npm ls` les écrit exactement ainsi. */
+.xo-cli .xo-list__guide { color: var(--xo-faint); white-space: pre; flex: none; }
+
+/* --- Tableau : des colonnes alignées, aucun filet ----------------------- */
+
+.xo-cli .xo-table th {
+  background: none;
+  color: var(--xo-muted);
+  font-weight: 700;
+  padding: 0 2ch 0 0;
+}
+.xo-cli .xo-table td { border-bottom: 0; padding: 0 2ch 0 0; }
+.xo-cli .xo-table tbody tr:nth-child(even),
+.xo-cli .xo-table tbody tr:hover { background: none; }
+.xo-cli .xo-table tbody tr[aria-selected="true"] {
+  background: none;
+  color: inherit;
+  font-weight: 700;
+}
+
+/* --- Actions : des mots, pas des boutons -------------------------------- */
+
+.xo-cli .xo-btn {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: var(--xo-accent);
+}
+.xo-cli .xo-btn::before { content: "» "; color: var(--xo-faint); }
+
+/* Surbrillance, pas soulignement : le trait sous un mot dit « lien », alors
+   qu'un utilitaire en ligne de commande met l'entrée courante en vidéo inverse.
+   Le préfixe entre dans la surbrillance avec le libellé — c'est le groupe
+   entier « » Valider » qui s'allume. */
+.xo-cli .xo-btn:hover,
+.xo-cli .xo-btn:focus-visible { background: var(--xo-accent); color: var(--xo-inverse); }
+.xo-cli .xo-btn:hover::before,
+.xo-cli .xo-btn:focus-visible::before { color: var(--xo-inverse); }
+
+.xo-cli .xo-btn--danger { color: var(--xo-danger); }
+.xo-cli .xo-btn--danger:hover,
+.xo-cli .xo-btn--danger:focus-visible { background: var(--xo-danger); color: var(--xo-inverse); }
+.xo-cli .xo-btn--ghost::before { content: none; }
+
+/* Réaffirmés, tous les deux : « .xo-cli .xo-btn:hover » pèse autant que
+   « .xo-btn[disabled]:hover » et « .xo-btn[aria-pressed] », et vient plus bas
+   dans la feuille — sans ces règles, un bouton inerte s'allumerait au survol et
+   l'état enfoncé disparaîtrait. */
+.xo-cli .xo-btn[disabled] { color: var(--xo-faint); }
+.xo-cli .xo-btn[disabled]:hover { background: transparent; color: var(--xo-faint); }
+.xo-cli .xo-btn[disabled]:hover::before { color: var(--xo-faint); }
+.xo-cli .xo-btn[aria-pressed="true"] { background: var(--xo-accent); color: var(--xo-inverse); }
+.xo-cli .xo-btn[aria-pressed="true"]::before { color: var(--xo-inverse); }
+.xo-cli .xo-btn-group .xo-btn + .xo-btn { margin-left: 0; }
+
+/* --- Saisie : une invite, pas un champ ---------------------------------- */
+
+.xo-cli .xo-field { flex-direction: row; align-items: baseline; gap: 1ch; }
+.xo-cli .xo-label { color: var(--xo-fg); flex: none; }
+.xo-cli .xo-label::before { content: "? "; color: var(--xo-success); }
+.xo-cli .xo-input,
+.xo-cli .xo-select,
+.xo-cli .xo-textarea {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: var(--xo-accent);
+}
+.xo-cli .xo-input:focus,
+.xo-cli .xo-select:focus,
+.xo-cli .xo-textarea:focus { background: transparent; text-decoration: underline; }
+
+/* --- Barres et retours -------------------------------------------------- */
+
+.xo-cli .xo-statusbar,
+.xo-cli .xo-keys {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--xo-muted);
+}
+.xo-cli .xo-keys { font-size: inherit; }
+.xo-cli .xo-keys kbd { color: var(--xo-accent); }
+
+.xo-cli .xo-log__line { padding: 0; }
+.xo-cli .xo-log__line:hover { background: none; }
+
+.xo-cli .xo-alert { border: 0; background: none; padding: 0; }
+.xo-cli .xo-progress__track { border: 0; }
+.xo-cli .xo-tabs { border: 0; gap: 2ch; }
+.xo-cli .xo-tabs__tab { padding: 0; background: none; }
+.xo-cli .xo-tabs__tab[aria-selected="true"] { background: none; color: var(--xo-fg); text-decoration: underline; }
+
+/* --- 30 quater. Mouvement ------------------------------------------------
+   Trois utilitaires, en CSS seul : aucun JS à écrire, aucun réglage à passer.
+   Ils servent surtout aux modes console et CLI, où une sortie ARRIVE — mais
+   rien ne les y limite.
+
+   Un terminal n'a pas de fondu : une ligne s'affiche, d'un coup. Ce n'est donc
+   pas la durée qui fait l'effet — elle est d'une milliseconde — mais le RETARD,
+   échelonné par --xo-i, pendant lequel `both` maintient l'état de départ.
+
+   Pas de `steps(1)` ici : en jump-end (le défaut), la sortie ne quitte jamais
+   son premier palier, et la ligne resterait invisible pour toujours. */
+
+.xo-appear {
+  animation: xo-appear 1ms linear both;
+  animation-delay: calc(var(--xo-i, 0) * 90ms);
+}
+@keyframes xo-appear { from { opacity: 0; } }
+
+/* Confirmation d'un geste : la ligne bat une fois, puis rend la main. Même
+   allure que xo-pulse (§18) mais one-shot — un retour d'action qui continuerait
+   de clignoter deviendrait une alarme.
+
+   La teinte reste au fond : le texte ne bouge pas, donc rien ne saute à la
+   lecture pendant que ça bat. */
+.xo-flash { animation: xo-flash .5s steps(2) 1; }
+.xo-flash--success { animation: xo-flash-success .5s steps(2) 1; }
+.xo-flash--warning { animation: xo-flash-warning .5s steps(2) 1; }
+.xo-flash--danger  { animation: xo-flash-danger .5s steps(2) 1; }
+
+@keyframes xo-flash         { 50% { background: var(--xo-raise); } }
+@keyframes xo-flash-success { 50% { background: color-mix(in srgb, var(--xo-success) 30%, transparent); } }
+@keyframes xo-flash-warning { 50% { background: color-mix(in srgb, var(--xo-warning) 30%, transparent); } }
+@keyframes xo-flash-danger  { 50% { background: color-mix(in srgb, var(--xo-danger) 30%, transparent); } }
+
+/* Teinte d'état : dire au fond ce qu'un glyphe seul dit mal quand la liste est
+   longue. Volontairement basse — à 14 %, elle se distingue sans passer devant
+   la sélection, qui reste le repère fort.
+
+   `color-mix` plutôt qu'un jeton de plus : cinq teintes × cinq intensités
+   feraient vingt-cinq jetons à maintenir pour un effet dérivable. */
+.xo-tint--accent  { background: color-mix(in srgb, var(--xo-accent) 14%, transparent); }
+.xo-tint--success { background: color-mix(in srgb, var(--xo-success) 14%, transparent); }
+.xo-tint--warning { background: color-mix(in srgb, var(--xo-warning) 14%, transparent); }
+.xo-tint--danger  { background: color-mix(in srgb, var(--xo-danger) 14%, transparent); }
+.xo-tint--faint   { background: color-mix(in srgb, var(--xo-faint) 14%, transparent); }
+
+/* La sélection et le survol doivent rester au-dessus de la teinte d'état,
+   sinon une ligne marquée cesse de réagir au pointeur. */
+.xo-list__item[aria-selected="true"][class*="xo-tint--"] { background: var(--xo-accent); }
+.xo-list__item[class*="xo-tint--"]:hover { background: var(--xo-raise); }
+
+/* Atténuation graduée : --xo-fade de 1 (net) à 0 (effacé). Sert à donner une
+   profondeur temporelle sans changer ni la couleur ni la place.
+
+   À ne poser que sur du décor — heure, source. Sur du texte utile, une opacité
+   basse retomberait sous le contraste minimum, comme --xo-faint. */
+.xo-fade { opacity: var(--xo-fade, 1); }
+
+/* Saisie qui se tape : la largeur s'ouvre sur --xo-n caractères. Poser --xo-n
+   au nombre de caractères du texte, sinon la ligne se coupe ou saute. */
+.xo-type {
+  display: inline-block;
+  overflow: hidden;
+  white-space: nowrap;
+  vertical-align: bottom;
+  width: calc(var(--xo-n, 20) * 1ch);
+  animation: xo-type calc(var(--xo-n, 20) * 40ms) linear both;
+  animation-delay: calc(var(--xo-i, 0) * 90ms);
+}
+@keyframes xo-type { from { width: 0; } }
+
+/* Attente sans progression connue : un bloc traverse le rail. La piste masque
+   déjà ce qui déborde (§18), il n'y a rien à ajouter. */
+.xo-progress--busy .xo-progress__fill {
+  width: 30%;
+  animation: xo-busy 1.2s linear infinite;
+}
+@keyframes xo-busy {
+  from { margin-left: -30%; }
+  to   { margin-left: 100%; }
+}
+
+/* --- 31. Préférences & responsive --------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;    /* xo-lint-ignore : préférence utilisateur */
+    transition-duration: .01ms !important;   /* xo-lint-ignore : préférence utilisateur */
+    /* Le retard aussi, sans quoi une apparition échelonnée (§30 quater) laisse
+       ses lignes invisibles le temps de leur délai — la préférence rendrait le
+       contenu moins accessible, pas plus. */
+    animation-delay: .01ms !important;       /* xo-lint-ignore : préférence utilisateur */
+  }
+}
+
+/* --- Impression ----------------------------------------------------------
+   Le papier n'a ni focus, ni survol, ni défilement. On garde la grammaire —
+   monospace, filets d'un trait, titres incrustés — et on retire tout ce qui
+   n'existe que parce qu'un écran est interactif. */
+
+@media print {
+  :root {
+    /* Encre : fond blanc, texte noir. Les accents deviennent des gris, sauf
+       là où la couleur porte du sens, qui passe alors par le gras. */
+    --xo-bg: #FFF;  --xo-panel: #FFF;  --xo-subtle: #FFF;  --xo-raise: #FFF;
+    --xo-fg: #000;  --xo-muted: #333;  --xo-faint: #666;   --xo-inverse: #FFF;
+    --xo-accent: #000;  --xo-success: #000;  --xo-warning: #000;
+    --xo-danger: #000;  --xo-info: #000;  --xo-special: #000;  --xo-alt: #000;
+    --xo-border: #000;  --xo-rule: #999;
+    --xo-add: #FFF;  --xo-del: #FFF;  --xo-term: #FFF;
+    --xo-fs: 10pt;
+  }
+
+  @page { margin: 15mm; }
+
+  html { color-scheme: light; }
+  body { background: #FFF; color: #000; }
+
+  /* Le chrome de l'écran : rien de tout cela ne s'imprime. */
+  .xo-nav, .xo-keys, .xo-toolbar, .xo-statusbar, .xo-tabs,
+  .xo-pagination, .xo-toasts, .xo-split__handle, .xo-sidebar,
+  .xo-skeleton, .xo-spinner, .xo-cursor { display: none !important; }  /* xo-lint-ignore */
+
+  /* Une boîte fermée ne s'imprime pas ; une boîte ouverte s'imprime en place. */
+  dialog:not([open]) { display: none !important; }   /* xo-lint-ignore */
+  dialog[open] { position: static; border: 1px solid #000; max-height: none; }
+  dialog::backdrop { display: none; }
+
+  /* Rien ne doit rester replié ni hors du cadre : le papier ne défile pas. */
+  details > summary { display: none; }
+  details > *:not(summary) { display: block !important; }   /* xo-lint-ignore */
+  .xo-panel__body, .xo-table-wrap, .xo-log, .xo-dialog__body, .xo-scroll {
+    overflow: visible;
+    max-height: none;
+  }
+
+  /* Une ligne sélectionnée en vidéo inverse noircit la page : le gras et un
+     chevron disent la même chose sans vider la cartouche. */
+  .xo-list__item[aria-selected="true"],
+  .xo-table tbody tr[aria-selected="true"],
+  .xo-nav__link[aria-current="page"] {
+    background: none;
+    color: #000;
+    font-weight: 700;
+  }
+  .xo-list__item[aria-selected="true"]::before { content: "> "; }
+
+  /* Un lien imprimé sans son URL est un lien perdu — sauf les ancres. */
+  .xo-prose a[href]:not([href^="#"])::after {
+    content: " (" attr(href) ")";
+    color: #666;
+  }
+
+  /* Ne pas couper un panneau ni une ligne de tableau entre deux pages. */
+  .xo-panel, .xo-alert, .xo-kv__row, .xo-log__line, tr { break-inside: avoid; }
+  h1, h2, h3, .xo-panel__title { break-after: avoid; }
+  thead { display: table-header-group; }
+
+  /* Les barres pleines dévorent la cartouche. Les trois modificateurs sont
+     listés : sans eux, .xo-progress--danger .xo-progress__fill l'emporterait
+     en spécificité et resterait noir. */
+  .xo-progress__fill,
+  .xo-progress--success .xo-progress__fill,
+  .xo-progress--warning .xo-progress__fill,
+  .xo-progress--danger  .xo-progress__fill {
+    background: #DDD;
+    border: 1px solid #000;
+  }
+  .xo-progress__track::after { display: none; }
+}
+
+@media (max-width: 719px) {
+  :root { --xo-fs: 12px; }
+  .xo-grid > [class*="xo-col-"] { grid-column: span 12; }
+  .xo-list__item { padding-top: 6px; padding-bottom: 6px; }
+
+  /* Deux colonnes redimensionnables n'ont pas de sens sur un écran étroit :
+     elles s'empilent et la poignée disparaît — donc sort aussi du parcours
+     clavier, ce qu'un simple visibility n'aurait pas fait. */
+  .xo-split {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr 1fr;   /* deux rangs : la poignée n'en occupe plus */
+  }
+  .xo-split__handle { display: none; }
+  .xo-split > :first-child { border-bottom: 1px solid var(--xo-border); }
+
+  /* Une colonne latérale figée à 24ch mange les deux tiers d'un écran étroit :
+     elle repasse au-dessus du contenu, en pleine largeur. */
+  .xo-layout { flex-direction: column; }
+  .xo-sidebar {
+    width: auto;
+    max-height: 40vh;
+    border-right: 0;
+    border-bottom: 1px solid var(--xo-border);
+  }
+}

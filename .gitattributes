@@ -1,0 +1,17 @@
+# Fins de ligne normalisées en LF dans le dépôt.
+#
+# Sans cette règle, Git convertit à la volée sur Windows (autocrlf) : le fichier
+# stocké et le fichier sur disque diffèrent, et le jour où quelqu'un ouvre le
+# projet depuis WSL ou un éditeur réglé autrement, tout le dépôt paraît modifié
+# sans qu'une ligne ait bougé.
+
+* text=auto eol=lf
+
+# Les binaires n'ont pas de fins de ligne à normaliser — y toucher les corrompt.
+*.woff2  binary
+*.png    binary
+*.jpg    binary
+*.webp   binary
+*.gif    binary
+*.avif   binary
+*.sqlite binary

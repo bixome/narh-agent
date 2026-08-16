@@ -1,0 +1,25 @@
+# NARH — ce qui ne doit pas être servi.
+#
+# Apache 2.4. Laragon sert par nginx par défaut : ce fichier n'y a AUCUN effet.
+# La règle équivalente est dans docs/deploiement.md — elle n'est pas facultative,
+# var/narh.sqlite contiendra les conversations et se téléchargerait d'une URL.
+
+Options -Indexes
+
+# Le dépôt git et tout fichier caché deviennent inexistants pour le web.
+# 404 plutôt que 403 : un refus confirmerait la présence du fichier.
+RedirectMatch 404 /\.(?!well-known)
+
+# Les bases, les verrous, le journal WAL, le bac à sable.
+RedirectMatch 404 ^/var/
+
+# Le code et l'outillage : inclus par les écrans, jamais appelés directement.
+RedirectMatch 404 ^/(src|config|tools)/
+
+<FilesMatch "^(bootstrap|cli)\.php$">
+  Require all denied
+</FilesMatch>
+
+<FilesMatch "^(CLAUDE\.md|README\.md)$">
+  Require all denied
+</FilesMatch>

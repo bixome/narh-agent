@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "narh-agent",
+      "runtimeExecutable": "D:\\laragon\\bin\\php\\php-8.3.30-Win32-vs16-x64\\php.exe",
+      "runtimeArgs": ["-S", "localhost:8100", "-t", "D:\\laragon\\www\\narh-agent"],
+      "port": 8100
+    }
+  ]
+}

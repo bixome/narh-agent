@@ -1,0 +1,21 @@
+# Les bases, les verrous, le journal WAL, le bac à sable.
+var/*
+!var/.gitkeep
+
+# Réglages de poste
+config/reglages.local.php
+
+# Éditeurs / OS
+.vscode/
+.idea/
+*.code-workspace
+Thumbs.db
+desktop.ini
+*~
+*.swp
+
+# Runtime
+*.log
+
+# Réglages de poste (Claude Code)
+.claude/settings.local.json
