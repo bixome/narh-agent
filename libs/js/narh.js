@@ -25,7 +25,6 @@
 const { mount } = await import('./xoshui.js' + new URL(import.meta.url).search);
 
 const app = document.querySelector('.xo-app');
-const phase = app?.dataset.phase ?? '';
 
 /* Les commandes déclarées mais pas encore branchées, et la phase qui les
    amènera — telles que `Ecran::COMMANDES` les décide. Sans cette table, le

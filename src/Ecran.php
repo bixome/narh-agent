@@ -332,12 +332,12 @@ final class Ecran
      emporte le champ vers le bas. Bornée à la hauteur de la vue, seule la
      conversation défile — l'en-tête, la barre d'état et le champ ne bougent plus. -->
 <div class="xo-app xo-console" style="height: 100vh"
-     data-phase="<?= e(NARH_PHASE) ?>"
      <?php /* Les commandes déclarées mais pas encore branchées, avec la phase
-              qui les amènera. Le navigateur annonçait jusqu'ici la phase de
-              l'application à leur place — « arrive après P5 » pour une commande
-              qui déclarait P4, et déjà livrée. Une seule table les décide
-              (COMMANDES), elle voyage donc telle quelle. */ ?>
+              qui les amènera. Le navigateur annonçait jadis la phase de
+              l'**application** à leur place — « arrive après P5 » pour une
+              commande qui déclarait P4, et déjà livrée. Une seule table les
+              décide (COMMANDES), elle voyage donc telle quelle. La table est
+              vide aujourd'hui : tout est branché. */ ?>
      data-phases="<?= e((string) json_encode(array_map(
          static fn (array $cmd): string => $cmd[2],
          array_filter(self::COMMANDES, static fn (array $cmd): bool => $cmd[2] !== ''),
@@ -478,7 +478,7 @@ final class Ecran
     <span><kbd>?</kbd> aide</span>
     <span class="xo-spacer"></span>
     <span class="xo-faint" id="etat-pied"><?= (int) $stats['articles'] ?> dépêches · <?= (int) $stats['groupes'] ?> événements</span>
-    <span class="xo-faint">NARH <?= e(NARH_VERSION) ?> · <?= e(NARH_PHASE) ?></span>
+    <span class="xo-faint">NARH <?= e(NARH_VERSION) ?></span>
   </div>
 
 </div>

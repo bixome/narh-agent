@@ -329,9 +329,20 @@ données :**
 
 - L'attribution des passages sur les pages qui mêlent article et recirculation
   (voir II.3). À traiter par un ancrage sur le conteneur, pas par un motif.
-- `NARH_PHASE` a fait son office. Son propre commentaire dit de la retirer quand
-  la v1 est complète — elle l'est. Sa suppression touche la barre d'état, ce
-  n'est donc pas une ligne mais un petit geste, laissé au prochain passage.
+- `relever` et `desancrer` n'ont qu'un retour textuel : elles n'ont rien à
+  montrer, mais ce sont les deux derniers endroits où l'on peut douter que le
+  clic a été pris.
+
+**`NARH_PHASE` est retirée.** Elle existait pour qu'un écran encore muet dise
+pourquoi il l'était ; P0 à P5 sont livrées, plus rien n'est muet. Elle avait au
+passage montré sa faiblesse : restée à `P0` pendant que P1 à P4 tournaient, elle
+affichait un mensonge en barre d'état. Ce qu'une commande déclare
+(`Ecran::COMMANDES`) se tient à jour tout seul ; une constante globale, non.
+
+**Laragon régénère un vhost par sous-dossier de `www`.** Supprimer
+`auto.<projet>.test.conf` sans supprimer le dossier ne sert à rien : il revient
+au rechargement suivant. C'est un seul geste, pas deux — le dossier emporte son
+vhost.
 
 ## Ce que ça change dans `CLAUDE.md`
 

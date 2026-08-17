@@ -18,14 +18,15 @@ const NARH_RACINE  = __DIR__;
 const NARH_VAR     = __DIR__ . '/var';
 const NARH_VERSION = '0.1';
 
-/* La phase en cours. Elle ne pilote aucun comportement : elle s'affiche, pour
-   qu'un écran encore muet dise pourquoi il l'est plutôt que de passer pour
-   cassé. À retirer quand la v1 est complète.
+/* `NARH_PHASE` a été retirée ici : elle existait pour qu'un écran encore muet
+   dise pourquoi il l'était plutôt que de passer pour cassé, et son propre
+   commentaire demandait son retrait une fois la v1 complète. P0 à P5 sont
+   livrées, plus rien n'est muet.
 
-   Restée à 'P0' jusqu'à l'absorption des deux projets d'origine, alors que P1 à
-   P4 tournaient : une constante qui ment est pire qu'une constante absente,
-   puisque l'écran l'affiche. */
-const NARH_PHASE = 'P5';
+   Elle avait au passage montré sa faiblesse : restée à 'P0' pendant que P1 à P4
+   tournaient, elle affichait un mensonge en barre d'état. Ce qu'une commande
+   déclare — voir `Ecran::COMMANDES` — se tient à jour tout seul, une constante
+   globale non. */
 
 /* Sans ce réglage explicite, PHP retombe sur l'UTC de l'ini (jamais fixé sur
    cette machine) : tout l'horodatage — journal, heure donnée au modèle, dates
