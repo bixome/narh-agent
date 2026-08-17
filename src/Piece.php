@@ -127,9 +127,30 @@ final class Piece
         $sources = (int) ($g['sources'] ?? 1);
         $fils = (int) ($g['fils'] ?? 0);
 
+        /* L'identifiant porté par la ligne est celui d'une **dépêche**, jamais
+           celui du groupe.
+
+           C'est ce que l'inspecteur ira chercher (`api/apercu.php?type=depeche`),
+           et un groupe n'a pas de texte à montrer. Le groupe reste dans
+           `data-groupe`, où le marquage et le repli le retrouvent.
+
+           Le piège, et il ne se voit pas : les deux numérotations se recouvrent
+           — 7 673 groupes pour 10 124 articles. Une ligne d'événement portant
+           l'identifiant de son groupe ouvrait donc presque toujours *un*
+           article, simplement pas le sien. Aucune erreur, aucun vide : juste le
+           mauvais article. `evenementEtReprises()` corrigeait déjà le cas de
+           l'arbre après coup ; les alertes, l'en-tête et le direct, qui
+           appellent cette fabrique directement, ne l'avaient pas.
+
+           Trois requêtes différentes alimentent cette fabrique et ne nomment pas
+           la dépêche de tête pareil — d'où les trois essais avant le repli. */
+        $article = (int) ($g['article_id'] ?? 0)
+            ?: (int) ($g['depeches'][0]['id'] ?? 0)
+            ?: (int) ($g['dernier_article'] ?? 0);
+
         return new self(
             nature: self::EVENEMENT,
-            id: (string) (int) $g['id'],
+            id: (string) ($article > 0 ? $article : (int) $g['id']),
             quand: (int) ($g['tri'] ?? $g['dernier'] ?? 0),
             titre: (string) $g['titre'],
             acteur: $sources > 1 ? $sources . ' rédactions' : (string) ($g['source_nom'] ?? ''),

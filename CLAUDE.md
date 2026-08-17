@@ -138,6 +138,15 @@ conversation. Pas de barre latérale, pas d'onglets, pas de colonnes permanentes
 - **Ce qui a disparu n'est pas perdu :** la veille, la mémoire, le journal et
   l'inspecteur sont devenus des **tuiles** (voir plus bas). Un panneau permanent
   occupe l'écran en permanence pour un contenu qu'on regarde par intermittence.
+- **L'inspection est contre le champ, pas dans le Newsdesk.** Le Newsdesk parle
+  de listes ; « Inspecté » parle d'**un** objet, celui qu'on vient de désigner.
+  Le laisser au milieu des listes obligeait l'œil à traverser l'écran pour
+  relier une ligne cliquée à gauche à son détail à droite. Entre l'utilisateur
+  et le champ, il forme une seule bande avec lui : on regarde ce qu'on a
+  désigné, on agit dessus ou on en parle, puis on lit. Les gestes restent
+  **avec** l'objet qu'ils visent. La zone **n'existe qu'une fois une ligne
+  choisie**, et ne se referme plus ensuite : permanente elle volerait de la
+  hauteur pour rien, escamotable elle ferait sauter le champ sous le curseur.
 - **Deux ou trois colonnes dans la conversation.** Une tuile seule prend la
   largeur ; à plusieurs, elles se partagent la rangée. Cela se décide dans
   `Vue::tuiles()` et nulle part ailleurs — une tuile ne connaît que la largeur

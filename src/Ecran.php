@@ -395,6 +395,12 @@ final class Ecran
 
           <?= self::utilisateur($c) ?>
 
+          <!-- Inspecté, entre l'utilisateur et le champ : ce qu'on vient de
+               désigner, et ce qu'on peut en faire, juste avant l'endroit où on
+               en parle. Absent tant qu'aucune ligne n'est choisie — il ne prend
+               de la hauteur que quand il a quelque chose à montrer. -->
+          <?= self::inspecte() ?>
+
           <!-- Le champ, sous l'utilisateur et **au-dessus** du flux : il ne
                bouge jamais, et ce qui vient d'arriver apparaît immédiatement
                dessous. En bas, il obligeait à faire défiler pour parler dès que
@@ -622,36 +628,33 @@ final class Ecran
     }
 
     /**
-     * Le Newsdesk — le poste de travail.
+     * La zone d'inspection — ce qu'on regarde, et ce qu'on peut en faire.
      *
-     * Quatre zones, et leur ordre est celui du geste : on regarde une ligne, on
-     * la traite, on cherche la suivante, on outille.
+     * Elle vivait en tête du Newsdesk, dans la colonne de droite. Elle est
+     * passée **entre l'utilisateur et le champ**, pour une raison de lecture :
+     * le Newsdesk parle de *listes* — ce qu'on a marqué, ce qui arrive, les
+     * outils — alors qu'Inspecté parle d'**un** objet, celui qu'on vient de
+     * choisir. Le laisser au milieu des listes obligeait l'œil à traverser la
+     * colonne pour relier une ligne cliquée à gauche à son détail à droite.
      *
-     * | Zone | Fixe ? |
-     * |---|---|
-     * | **Inspecté** — la ligne cliquée, avec ses actions | en haut |
-     * | **Suivis · Traités · Écartés** — ce qu'on a marqué | onglets |
-     * | **Alertes et veille** — ce qui arrive, alertes d'abord | fixe |
-     * | **Outils** — le poste de commande | en bas |
+     * Ici, elle forme avec le champ une seule bande : on regarde ce qu'on a
+     * désigné, on agit dessus ou on en parle, puis on lit la conversation. Les
+     * trois gestes sont dans l'ordre où on les fait.
      *
-     * Les actions vivent **dans Inspecté**, pas dans une barre à part : cliquer
-     * une ligne ouvre son détail, et les gestes qui la visent doivent être au
-     * même endroit qu'elle. Séparés, il fallait regarder en haut pour savoir sur
-     * quoi on allait agir en bas.
+     * **Elle n'existe que lorsqu'une ligne est choisie.** Permanente, elle
+     * volerait de la hauteur à la conversation pour un contenu qu'on regarde
+     * par intermittence — c'est exactement le reproche que `CLAUDE.md` fait aux
+     * panneaux, et le champ ne doit jamais descendre hors de l'écran. `narh.js`
+     * la découvre en même temps que les gestes, sur la même sélection.
      *
-     * Elles passent par `commander()` comme tout le reste — ce n'est pas un
-     * raccourci, c'est une porte de plus vers les mêmes commandes (règle 5).
-     *
-     * @param array<string, mixed> $c contexte rendu par contexte()
+     * Les actions restent **avec** l'objet qu'elles visent, pas dans une barre
+     * à part : séparées, il fallait regarder à un endroit pour savoir sur quoi
+     * on allait agir à un autre. Elles passent par `commander()` comme tout le
+     * reste — une porte de plus vers les mêmes commandes, jamais un raccourci
+     * (règle 5).
      */
-    private static function newsdesk(array $c): string
+    private static function inspecte(): string
     {
-        $antenne = Direct::enAntenne();
-        $alertes = $c['alertes'];
-        $appels = $c['appels'];
-        $stats = $c['stats'];
-        $statuts = $c['statuts'];
-
         /* Les gestes qui visent une ligne, dans l'ordre où un desk les
            enchaîne : on regarde, on décide, on ouvre, on interroge. */
         $gestes = '';
@@ -668,35 +671,55 @@ final class Ecran
                 . Icone::rendre($icone) . ' ' . e($court) . '</button>';
         }
 
+        /* `max-height` en clair, pas `--xo-max-h` : le token n'est lu que par
+           `xo-panel__body`, `xo-log`, `xo-editor`, `xo-dialog__body` et
+           `xo-table-wrap`. Posé sur `xo-scroll`, qui n'est qu'un
+           `overflow: auto`, il ne bornerait rien — le détail d'une dépêche avec
+           son résumé et sa fratrie pousserait le champ hors de l'écran.
+
+           Plus bas qu'au Newsdesk (16vh contre 20) : la colonne fait ici les
+           deux tiers de la largeur, le même texte y tient en moins de lignes,
+           et ce qui est gagné revient à la conversation. */
+        return '<section class="xo-panel xo-panel--pad" id="inspection"'
+            . ' style="flex: none; margin-top: 8px" aria-label="Inspecté" hidden>'
+            . '<div class="xo-rule xo-rule--start">Inspecté</div>'
+            . '<div class="xo-scroll" id="desk-inspecte" style="max-height: 16vh">'
+            . Vue::inspecteur(null) . '</div>'
+            . '<div class="xo-row" id="desk-gestes" style="margin-top: 8px" hidden>'
+            . '<div class="xo-btn-group" role="group" aria-label="Gestes de desk">' . $gestes . '</div>'
+            . '</div>'
+            . '</section>';
+    }
+
+    /**
+     * Le Newsdesk — le poste de travail.
+     *
+     * Trois zones de **listes**, et leur ordre est celui du geste : on trie ce
+     * qu'on a marqué, on cherche la suivante, on outille. Ce qui parlait d'un
+     * seul objet — Inspecté — est passé à gauche, contre le champ.
+     *
+     * | Zone | Fixe ? |
+     * |---|---|
+     * | **Suivis · Traités · Écartés** — ce qu'on a marqué | onglets |
+     * | **Alertes et veille** — ce qui arrive, alertes d'abord | fixe |
+     * | **Outils** — le poste de commande | en bas |
+     *
+     * @param array<string, mixed> $c contexte rendu par contexte()
+     */
+    private static function newsdesk(array $c): string
+    {
+        $antenne = Direct::enAntenne();
+        $alertes = $c['alertes'];
+        $appels = $c['appels'];
+        $stats = $c['stats'];
+        $statuts = $c['statuts'];
+
         /* Colonne flexible : les onglets prennent la hauteur qui reste et
            défilent en eux-mêmes. Sans cela, un onglet plus long que les autres
            débordait de la bande au lieu d'y tenir. */
         return '<section class="xo-panel xo-panel--pad"'
             . ' style="display: flex; flex-direction: column; flex: 1; min-height: 0">'
             . '<h2 class="xo-panel__title">Newsdesk</h2>'
-
-            /* -- Inspecté, en haut et fixe --
-               Cliquer une ligne, où qu'elle soit, la montre ici. C'est le seul
-               endroit de la colonne qui parle d'**un** objet plutôt que d'une
-               liste, d'où sa place en tête : on regarde avant de trier. */
-            . '<div style="flex: none; margin-bottom: 8px">'
-            . '<div class="xo-rule xo-rule--start">Inspecté</div>'
-            /* `max-height` en clair, pas `--xo-max-h` : le token n'est lu que
-               par `xo-panel__body`, `xo-log`, `xo-editor`, `xo-dialog__body` et
-               `xo-table-wrap`. Posé sur `xo-scroll`, qui n'est qu'un
-               `overflow: auto`, il ne bornait rien — le détail d'une dépêche
-               avec son résumé et sa fratrie poussait alors les onglets, la
-               veille et les outils hors de la colonne. */
-            . '<div class="xo-scroll" id="desk-inspecte" style="max-height: 20vh">'
-            . Vue::inspecteur(null) . '</div>'
-
-            /* Les gestes, contre l'objet qu'ils visent. Ils n'apparaissent que
-               lorsqu'une ligne est choisie : permanents, ils occupaient deux
-               rangées pour des actions inapplicables neuf fois sur dix. */
-            . '<div class="xo-row" id="desk-gestes" style="margin-top: 8px" hidden>'
-            . '<div class="xo-btn-group" role="group" aria-label="Gestes de desk">' . $gestes . '</div>'
-            . '</div>'
-            . '</div>'
 
             /* -- Ce qu'on a marqué : un onglet par état --
                Trois onglets et non un filtre : ce sont trois décisions

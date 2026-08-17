@@ -375,7 +375,22 @@ document.addEventListener('xo:select', (e) => {
      réclamer par une commande revenait à demander deux gestes pour un. Les
      fils, eux, se rouvrent — ils n'ont pas de détail à montrer. */
   const nature = choisie?.dataset.nature;
-  if (nature === 'depeche' || nature === 'evenement') montrerInspecte(choisie.dataset.value);
+  if (nature === 'depeche' || nature === 'evenement') {
+    montrerInspecte(choisie.dataset.value);
+
+    /* La zone d'inspection s'ouvre ici, sur un choix réel, et non dans
+       `majGestes()` sur l'état de la sélection : XOSHUI marque déjà une option
+       comme choisie au montage de ses listes, si bien qu'au chargement une
+       ligne est « sélectionnée » sans que personne l'ait désignée. La zone
+       serait alors ouverte d'entrée, ce qui est précisément ce qu'on voulait
+       éviter en la sortant du Newsdesk — elle pousserait la conversation vers
+       le bas pour montrer une ligne qu'on n'a pas demandée.
+
+       Elle ne se referme plus ensuite : une zone qui disparaît à chaque
+       désélection ferait sauter le champ sous le curseur. */
+    const zone = document.getElementById('inspection');
+    if (zone) zone.hidden = false;
+  }
 });
 
 document.addEventListener('click', majGestes);
