@@ -165,9 +165,39 @@ final class Direct
      */
     public static function arreter(): array
     {
+        $bilan = self::bilan();
+        self::poserEtat('antenne', '0');
+
+        Journal::noter('ok', 'direct', sprintf(
+            'antenne fermée : %d segments, %d sujets, %d jetons, %s',
+            $bilan['segments'],
+            $bilan['sujets'],
+            $bilan['jetons'],
+            Util::duree($bilan['duree'] * 1000),
+        ));
+
+        return $bilan;
+    }
+
+    /**
+     * Le bilan de ce qui a été dit depuis l'ouverture de l'antenne.
+     *
+     * Séparé de `arreter()` parce qu'on peut vouloir passer la main **sans**
+     * couper le direct : une prise de quart transmet ce qui a été couvert, et
+     * l'antenne n'a aucune raison de s'interrompre pour ça. `arreter()` n'est
+     * donc plus qu'un bilan suivi d'une extinction.
+     *
+     * Le bilan couvre toujours **toute l'antenne**, pas seulement ce qui s'est
+     * dit depuis la note précédente. Deux notes prises à une heure d'écart sont
+     * alors deux photos du même quart, chacune datée dans le fil — plutôt que
+     * deux moitiés qu'il faudrait recoller pour savoir ce qui a été traité.
+     *
+     * @return array{segments: int, sujets: int, duree: int, jetons: int, couvert: list<array<string, mixed>>}
+     */
+    public static function bilan(): array
+    {
         $debut = (int) self::etat('debut', (string) time());
         $segments = (int) self::etat('segments');
-        self::poserEtat('antenne', '0');
 
         $st = self::pdo()->prepare('SELECT groupe_id, fois FROM direct_vu WHERE quand >= ? ORDER BY quand DESC');
         $st->execute([$debut]);
@@ -189,23 +219,13 @@ final class Direct
             }
         }
 
-        $bilan = [
+        return [
             'segments' => $segments,
             'sujets'   => count($vus),
             'duree'    => max(0, time() - $debut),
             'jetons'   => (int) self::etat('voix_jetons'),
             'couvert'  => $couvert,
         ];
-
-        Journal::noter('ok', 'direct', sprintf(
-            'antenne fermée : %d segments, %d sujets, %d jetons, %s',
-            $bilan['segments'],
-            $bilan['sujets'],
-            $bilan['jetons'],
-            Util::duree($bilan['duree'] * 1000),
-        ));
-
-        return $bilan;
     }
 
     /**

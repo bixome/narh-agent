@@ -9,6 +9,7 @@ session_start();
  *
  *   GET api/direct.php?action=ouvrir    — bascule en agent en direct
  *   GET api/direct.php?action=segment   — le segment suivant, déjà rendu
+ *   GET api/direct.php?action=quart     — verse une note de quart, l'antenne continue
  *   GET api/direct.php?action=fermer    — repasse en conversation, rend la note de quart
  *
  * Un segment se compose en quelques millisecondes : c'est ce qui tient la
@@ -64,6 +65,39 @@ try {
 
     if (!Direct::enAntenne()) {
         repondre(['ok' => false, 'erreur' => "L'antenne est fermée."], 409);
+    }
+
+    /* Passer la main sans couper le direct.
+       Fermer l'antenne produit déjà une note ; mais un quart se relaie plus
+       souvent qu'il ne s'arrête, et rien ne justifiait qu'on doive éteindre
+       pour transmettre. Même bilan, même tour dans le fil — seule l'extinction
+       est retirée. */
+    if ($action === 'quart') {
+        $bilan = Direct::bilan();
+
+        if ($bilan['segments'] === 0) {
+            repondre(['ok' => false, 'erreur' => "Rien n'a encore été dit à l'antenne."], 409);
+        }
+
+        Agent::tourAjouter(
+            'quart',
+            'Note de quart — ' . $bilan['segments'] . ' segments à l\'antenne',
+            [],
+            $bilan,
+        );
+
+        Journal::noter('ok', 'direct', sprintf(
+            'note de quart à la demande : %d segments, %d sujets',
+            $bilan['segments'],
+            $bilan['sujets'],
+        ));
+
+        repondre([
+            'ok'      => true,
+            'antenne' => true,
+            'note'    => Vue::noteDeQuart($bilan),
+            'bilan'   => ['segments' => $bilan['segments'], 'sujets' => $bilan['sujets']],
+        ]);
     }
 
     /* La voix arrive **après** le segment, jamais avant : celui-ci est déjà à

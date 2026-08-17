@@ -38,6 +38,25 @@ try {
         exit;
     }
 
+    /* Le bandeau du mode dépêche, pour « Interroger l'agent dessus ».
+       Rien n'est inscrit : l'ancre ne devient un fait qu'au premier message,
+       ce qui est exactement la promesse de cette route. */
+    if ($type === 'ancre') {
+        $a = $base->article((int) ($_GET['id'] ?? 0));
+
+        if ($a === null) {
+            http_response_code(404);
+            echo json_encode(['ok' => false, 'erreur' => 'Dépêche introuvable.'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
+        echo json_encode(
+            ['ok' => true, 'html' => Vue::ancre($a), 'titre' => (string) $a['titre']],
+            JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE,
+        );
+        exit;
+    }
+
     /* Mot à mot dès qu'on cherche, comme l'outil et comme la tuile : trois
        façons de chercher pour une même question, c'en serait deux de trop. */
     $html = $q !== ''

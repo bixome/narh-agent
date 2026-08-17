@@ -26,6 +26,18 @@ const { mount } = await import('./xoshui.js' + new URL(import.meta.url).search);
 
 const app = document.querySelector('.xo-app');
 const phase = app?.dataset.phase ?? '';
+
+/* Les commandes déclarées mais pas encore branchées, et la phase qui les
+   amènera — telles que `Ecran::COMMANDES` les décide. Sans cette table, le
+   message de repli annonçait la phase de l'**application** à leur place : une
+   commande déclarant P4 s'annonçait « après P5 », donc après elle-même. */
+const phases = (() => {
+  try {
+    return JSON.parse(app?.dataset.phases || '{}');
+  } catch {
+    return {};
+  }
+})();
 const saisie = document.getElementById('chat-saisie');
 
 /* --- Menus --------------------------------------------------------------- */
@@ -191,17 +203,15 @@ async function commander(action, item = null, porte = 'inconnue', argument = '')
       await poserTuile(action);
       return;
 
-    /* Le corpus demande quoi chercher : sans requête il n'a rien à montrer,
-       là où la veille a toujours son fil du moment. */
-    case 'corpus': {
-      const q = (argument ?? '').trim();
-      if (!q) {
-        notifier('info', 'Chercher quoi ?', 'Taper « /corpus » suivi des mots à chercher.', 4000);
-        return;
-      }
-      await poserTuile('corpus', { q });
+    /* Le corpus se comporte pareil depuis les quatre portes.
+       Il a d'abord refusé de s'ouvrir sans requête, ce qui en faisait une
+       commande à deux vitesses : utilisable depuis le champ, inerte depuis la
+       palette et le clic droit, qui ne savent pas donner d'argument. C'est
+       exactement ce que la règle 5 cherche à éviter. Sans mots, il montre donc
+       ce qu'il a de plus récent — et le champ reste là pour affiner. */
+    case 'corpus':
+      await poserTuile('corpus', (argument ?? '').trim() ? { q: argument.trim() } : {});
       return;
-    }
 
     /* Lire, c'est afficher le texte ici ; ouvrir, c'est aller sur le site.
        Les deux existent parce qu'ils ne servent pas au même moment — et lire
@@ -233,8 +243,18 @@ async function commander(action, item = null, porte = 'inconnue', argument = '')
     case 'ouvrir': {
       const lien = cible?.dataset.lien
         ?? document.querySelector(`[data-parent="${cible?.dataset.groupe}"]`)?.dataset.lien;
-      if (lien) window.open(lien, '_blank', 'noopener');
-      else notifier('info', 'Pas de lien', "Déplier l'événement pour ouvrir une dépêche.", 4000);
+      if (!lien) {
+        notifier('info', 'Pas de lien', "Déplier l'événement pour ouvrir une dépêche.", 4000);
+        return;
+      }
+      /* Un onglet bloqué ne dit rien de lui-même : c'était la seule action de
+         l'écran dont l'échec était invisible, et on croyait au lien mort.
+         `window.open` rend null quand le navigateur refuse — on le dit, et on
+         propose la lecture locale, qui ne dépend d'aucune permission. */
+      if (window.open(lien, '_blank', 'noopener') === null) {
+        notifier('warning', 'Onglet bloqué',
+          'Le navigateur a refusé la fenêtre. « Lire le texte ici » ne demande rien.', 6000);
+      }
       return;
     }
 
@@ -245,15 +265,71 @@ async function commander(action, item = null, porte = 'inconnue', argument = '')
       return;
 
     case 'interroger': {
-      /* Le pont, sens veille → agent : la dépêche voyage dans l'adresse, et le
-         champ l'affiche sans encore l'écrire dans le fil — c'est le premier
-         message qui la versera au dossier. */
+      /* Le pont, sens veille → agent : le champ porte la dépêche sans encore
+         l'écrire dans le fil — c'est le premier message qui la versera.
+
+         Sans rechargement, comme `fil-neuf`. Il rechargeait la page jusqu'ici,
+         ce que le commentaire de `fil-neuf` proscrit trois lignes plus bas :
+         l'écran clignotait entier pour un bandeau, et depuis que la zone
+         d'inspection s'ouvre au clic, le rechargement la refermait — on perdait
+         ce qu'on regardait au moment précis où l'on demande à en parler.
+
+         Le bandeau vient du serveur déjà rendu (`Vue::ancre`), le navigateur ne
+         fait que le poser (règle 2). L'adresse suit par `replaceState`, comme
+         `desancrer` : rouvrir l'onglet retrouve la même ancre. */
       const id = cible?.dataset.value;
       if (!id) {
         notifier('info', 'Aucune ligne visée', "Choisir d'abord une dépêche.", 3000);
         return;
       }
-      location.href = `/?depeche=${encodeURIComponent(id)}`;
+
+      try {
+        const data = await fetch(`api/apercu.php?type=ancre&id=${encodeURIComponent(id)}`)
+          .then((r) => r.json());
+        if (!data.ok) throw new Error(data.erreur || 'dépêche introuvable');
+
+        document.getElementById('bandeau-ancre')?.remove();
+        document.getElementById('zone-champ')?.insertAdjacentHTML('afterbegin', data.html);
+        mount(document.getElementById('zone-champ'));
+
+        if (saisie) {
+          saisie.dataset.depeche = id;
+          saisie.placeholder = 'Demandez à propos de cette dépêche…';
+          saisie.focus();
+        }
+
+        const avec = new URL(location.href);
+        avec.searchParams.set('depeche', id);
+        history.replaceState(null, '', avec);
+      } catch (erreur) {
+        notifier('danger', 'Impossible de viser cette dépêche', String(erreur.message || erreur), 5000);
+      }
+      return;
+    }
+
+    /* Passer la main sans couper le direct : une prise de quart se relaie plus
+       souvent qu'elle ne s'arrête. « Revenir en conversation » produit déjà une
+       note, mais éteindre pour transmettre n'avait aucune raison d'être. */
+    case 'quart': {
+      if (!direct.antenne) {
+        notifier('info', 'Antenne fermée', "La note de quart rend compte d'un direct — en ouvrir un d'abord.", 5000);
+        return;
+      }
+      occupe('note de quart…');
+      try {
+        const data = await fetch('api/direct.php?action=quart').then((r) => r.json());
+        if (!data.ok) throw new Error(data.erreur || 'note refusée');
+
+        const suite = await appelerFils();
+        if (suite?.tours !== undefined) poserTours(suite.tours);
+
+        notifier('success', 'Note de quart versée au fil',
+          `${data.bilan.segments} segments, ${data.bilan.sujets} sujets. L'antenne continue.`, 8000);
+      } catch (erreur) {
+        notifier('danger', 'Note impossible', String(erreur.message || erreur), 5000);
+      } finally {
+        occupe(null);
+      }
       return;
     }
 
@@ -306,11 +382,16 @@ async function commander(action, item = null, porte = 'inconnue', argument = '')
     }
 
     default:
-      /* Une commande déclarée dans Ecran::COMMANDES mais pas encore branchée.
-         L'écran le dit plutôt que de ne rien faire — un bouton muet passe pour
-         cassé. */
+      /* Deux cas qu'il ne faut pas confondre, et qui se disaient pareil : une
+         commande déclarée mais pas encore branchée, et un nom qui n'existe
+         pas — le champ accepte n'importe quel `/mot`. Dans les deux cas l'écran
+         parle plutôt que de ne rien faire : un bouton muet passe pour cassé. */
       console.info(`narh: ${action}`, { cible: cible?.dataset.value ?? null, porte });
-      notifier('warning', 'Pas encore branchée', `« ${action} » arrive après ${phase}.`, 5000);
+      if (phases[action]) {
+        notifier('warning', 'Pas encore branchée', `« ${action} » arrive avec ${phases[action]}.`, 5000);
+      } else {
+        notifier('info', 'Commande inconnue', `« ${action} » n'existe pas. Ctrl+K donne la liste.`, 5000);
+      }
   }
 }
 

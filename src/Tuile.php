@@ -108,16 +108,31 @@ final class Tuile
             self::ALERTES => $this->contenuAlertes(),
             self::MEMOIRE => ['fils' => Memoire::fils(30, Agent::filId())],
             self::LECTURE => $this->contenuLecture(),
-            self::CORPUS  => [
-                'passages' => Corpus::chercher(
-                    (string) ($this->params['q'] ?? ''),
-                    (int) ($this->params['limite'] ?? 6)
-                ),
-                'q'    => trim((string) ($this->params['q'] ?? '')),
-                'etat' => Corpus::etat(),
-            ],
+            self::CORPUS  => $this->contenuCorpus(),
             default       => [],
         };
+    }
+
+    /**
+     * Le corpus : ce qui répond à des mots, ou ce qui vient d'y entrer.
+     *
+     * Sans requête, la tuile montrait « rien à chercher » — utile depuis le
+     * champ, inerte depuis la palette et le clic droit, qui ne savent pas
+     * donner d'argument. Une commande ne doit pas se comporter autrement selon
+     * la porte (règle 5), d'où ce repli sur les derniers passages rangés.
+     *
+     * @return array<string, mixed>
+     */
+    private function contenuCorpus(): array
+    {
+        $q = trim((string) ($this->params['q'] ?? ''));
+        $limite = (int) ($this->params['limite'] ?? 6);
+
+        return [
+            'passages' => $q !== '' ? Corpus::chercher($q, $limite) : Corpus::recents($limite),
+            'q'        => $q,
+            'etat'     => Corpus::etat(),
+        ];
     }
 
     /**

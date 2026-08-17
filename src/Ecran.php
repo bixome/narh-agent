@@ -63,7 +63,7 @@ final class Ecran
         'desancrer'    => ['Oublier la dépêche visée',   false, '',   'Conversation', 'ecarter', ''],
         'fil-neuf'     => ['Ouvrir un fil neuf',         false, '',   'Conversation', 'fil-neuf', ''],
         'oublier'      => ['Oublier le fil',             true,  '',   'Conversation', 'oublier', 'oublier'],
-        'quart'        => ['Écrire la note de quart',    false, 'P4', 'Conversation', 'journal', ''],
+        'quart'        => ['Écrire la note de quart',    false, '',   'Conversation', 'journal', ''],
     ];
 
     /**
@@ -296,20 +296,7 @@ final class Ecran
            dépêche au dossier. Tout état doit pouvoir se quitter — sans cette
            croix, il fallait recharger l'adresse à la main pour revenir à une
            conversation ordinaire, et rien à l'écran ne le disait. */
-        $bandeau = '';
-        if ($ancre !== null) {
-            $bandeau = '<div class="xo-alert" role="status" id="bandeau-ancre" style="margin-bottom: 8px">'
-                . '<span aria-hidden="true">' . Vue::glyphe((int) $ancre['niveau']) . '</span>'
-                . '<span class="xo-alert__body">'
-                . '<span class="xo-alert__title">À propos de cette dépêche.</span> '
-                . e(Util::tronquer((string) $ancre['titre'], 110))
-                . ' <span class="xo-faint">— ' . e((string) $ancre['source_nom']) . '</span>'
-                . '</span>'
-                . '<button class="xo-btn xo-btn--ghost" type="button" data-action="desancrer"'
-                . ' data-xo-tip="Revenir à une conversation ordinaire" aria-label="Oublier cette dépêche">'
-                . Icone::rendre('ecarter') . '</button>'
-                . '</div>';
-        }
+        $bandeau = $ancre !== null ? Vue::ancre($ancre) : '';
 
         ob_start();
         ?>
@@ -331,6 +318,15 @@ final class Ecran
      conversation défile — l'en-tête, la barre d'état et le champ ne bougent plus. -->
 <div class="xo-app xo-console" style="height: 100vh"
      data-phase="<?= e(NARH_PHASE) ?>"
+     <?php /* Les commandes déclarées mais pas encore branchées, avec la phase
+              qui les amènera. Le navigateur annonçait jusqu'ici la phase de
+              l'application à leur place — « arrive après P5 » pour une commande
+              qui déclarait P4, et déjà livrée. Une seule table les décide
+              (COMMANDES), elle voyage donc telle quelle. */ ?>
+     data-phases="<?= e((string) json_encode(array_map(
+         static fn (array $cmd): string => $cmd[2],
+         array_filter(self::COMMANDES, static fn (array $cmd): bool => $cmd[2] !== ''),
+     ), JSON_UNESCAPED_UNICODE | JSON_FORCE_OBJECT)) ?>"
      data-antenne="<?= $antenne ? '1' : '0' ?>"
      data-budget="<?= Direct::BUDGET ?>"
      data-fil="<?= Agent::filId() ?>"
@@ -406,7 +402,10 @@ final class Ecran
                dessous. En bas, il obligeait à faire défiler pour parler dès que
                la conversation dépassait une hauteur d'écran — le geste le plus
                fréquent était le plus coûteux. -->
-          <div style="flex: none; margin: 16px 0">
+          <!-- `id` : « Interroger l'agent dessus » y insère le bandeau sans
+               recharger la page. Sans point d'ancrage nommé, il aurait fallu le
+               deviner par sa position, qui bougerait au premier ajout. -->
+          <div id="zone-champ" style="flex: none; margin: 16px 0">
             <?= $bandeau ?>
             <?= self::champ($ancre) ?>
           </div>

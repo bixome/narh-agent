@@ -134,6 +134,41 @@ final class Corpus
         return $out;
     }
 
+    /**
+     * Les derniers passages rangés, un par article.
+     *
+     * Ce que le corpus montre quand on l'ouvre sans rien chercher. Sans cela,
+     * la commande était utilisable depuis le champ — qui sait donner des mots —
+     * et inerte depuis la palette et le clic droit, qui ne le savent pas : une
+     * commande à deux vitesses selon la porte, ce que la règle 5 interdit.
+     *
+     * Le tri se fait sur `article_lu.quand`, l'ordre d'ingestion, et non sur la
+     * date de l'article : on montre ce qui vient d'entrer dans la mémoire, pas
+     * ce qui vient d'être publié — c'est la veille qui répond à cette
+     * question-là.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public static function recents(int $limite = 8): array
+    {
+        /* `CAST(p.rang AS INTEGER)` et non `p.rang = 0` : dans une table FTS5
+           toutes les colonnes sont du texte, même celles déclarées UNINDEXED.
+           La comparaison avec un entier ne rapproche alors rien, et sans erreur
+           — la requête rendait zéro ligne sur un corpus de 4 123 passages. */
+        $st = self::pdo()->prepare(
+            "SELECT p.texte, p.lien, p.titre, p.source, p.date
+             FROM article_lu l
+             JOIN passage p ON p.lien = l.lien AND CAST(p.rang AS INTEGER) = 0
+             WHERE l.statut = 'ok'
+             ORDER BY l.quand DESC
+             LIMIT :limite"
+        );
+        $st->bindValue('limite', max(1, $limite), PDO::PARAM_INT);
+        $st->execute();
+
+        return $st->fetchAll();
+    }
+
     /* ---- Ingestion --------------------------------------------------------- */
 
     public static function dejaLu(string $lien): bool

@@ -493,6 +493,34 @@ final class Vue
     }
 
     /**
+     * Le bandeau du mode dépêche : la prochaine question partira avec elle.
+     *
+     * Rendu ici et non dans `Ecran` parce que deux chemins l'affichent — la
+     * page qui s'ouvre sur `?depeche=N`, et « Interroger l'agent dessus » qui
+     * le pose sans recharger. Deux gabarits auraient divergé au premier mot
+     * changé d'un seul côté (règle 2).
+     *
+     * Tout état doit pouvoir se quitter : d'où la croix, qui appelle
+     * `desancrer` comme n'importe quelle autre commande.
+     *
+     * @param array<string, mixed> $a
+     */
+    public static function ancre(array $a): string
+    {
+        return '<div class="xo-alert" role="status" id="bandeau-ancre" style="margin-bottom: 8px">'
+            . '<span aria-hidden="true">' . self::glyphe((int) $a['niveau']) . '</span>'
+            . '<span class="xo-alert__body">'
+            . '<span class="xo-alert__title">À propos de cette dépêche.</span> '
+            . e(Util::tronquer((string) $a['titre'], 110))
+            . ' <span class="xo-faint">— ' . e((string) $a['source_nom']) . '</span>'
+            . '</span>'
+            . '<button class="xo-btn xo-btn--ghost" type="button" data-action="desancrer"'
+            . ' data-xo-tip="Revenir à une conversation ordinaire" aria-label="Oublier cette dépêche">'
+            . Icone::rendre('ecarter') . '</button>'
+            . '</div>';
+    }
+
+    /**
      * Le texte d'un article, lu côté serveur.
      *
      * Ni cadre embarqué ni lien qui remplace l'écran : on rend les paragraphes
@@ -554,8 +582,8 @@ final class Vue
             return self::vide(
                 'silence',
                 $q === ''
-                    ? 'Rien à chercher.'
-                    : 'Aucun passage ne parle de « ' . $q .' ». Le corpus se remplit par `cli.php --ingerer`.'
+                    ? 'Le corpus est vide. Il se remplit par « php cli.php --ingerer ».'
+                    : 'Aucun passage ne parle de « ' . $q . ' ».'
             );
         }
 
