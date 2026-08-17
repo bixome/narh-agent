@@ -91,6 +91,13 @@ function duree(ms) {
  *
  * `null` la referme.
  */
+/* Les gestes en vol.
+   Un aller-retour serveur n'est pas instantané, et une commande relancée avant
+   sa réponse en fait deux : deux fils neufs, deux oublis. Le spinner le dit,
+   mais dire ne suffit pas — on refuse aussi. Une clé par famille de gestes, pas
+   une par commande : ouvrir un fil et en oublier un touchent le même objet. */
+const enVol = new Set();
+
 function occupe(dit) {
   const zone = document.getElementById('chat-phase');
   if (!zone) return;
@@ -364,9 +371,21 @@ async function commander(action, item = null, porte = 'inconnue', argument = '')
        serveur le renvoie déjà rendu. Un rechargement coupait l'antenne le temps
        de tout refaire, et faisait clignoter l'écran entier pour une colonne. */
     case 'fil-neuf': {
-      const data = await appelerFils('neuf');
-      if (data?.tours !== undefined) poserTours(data.tours);
-      notifier('info', 'Fil neuf', 'Le précédent reste ouvrable par /memoire.', 4000);
+      /* Mesuré : 352 ms côté serveur, et rien ne bougeait à l'écran pendant ce
+         temps — assez pour croire au clic perdu et recommencer, ce qui ouvrait
+         trois fils au lieu d'un. Le spinner du champ existait déjà et servait
+         aux tuiles ; il manquait simplement ici. */
+      if (enVol.has('fils')) return;
+      enVol.add('fils');
+      occupe('fil neuf…');
+      try {
+        const data = await appelerFils('neuf');
+        if (data?.tours !== undefined) poserTours(data.tours);
+        notifier('info', 'Fil neuf', 'Le précédent reste ouvrable par /memoire.', 4000);
+      } finally {
+        enVol.delete('fils');
+        occupe(null);
+      }
       return;
     }
 
@@ -376,8 +395,16 @@ async function commander(action, item = null, porte = 'inconnue', argument = '')
         notifier('info', 'Aucun fil visé', 'Choisir un fil dans une tuile.', 3000);
         return;
       }
-      const data = await appelerFils('oublier', id);
-      if (data?.tours !== undefined) poserTours(data.tours);
+      if (enVol.has('fils')) return;
+      enVol.add('fils');
+      occupe('oubli…');
+      try {
+        const data = await appelerFils('oublier', id);
+        if (data?.tours !== undefined) poserTours(data.tours);
+      } finally {
+        enVol.delete('fils');
+        occupe(null);
+      }
       return;
     }
 

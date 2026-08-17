@@ -684,8 +684,15 @@ final class Ecran
             . '<div class="xo-rule xo-rule--start">Inspecté</div>'
             . '<div class="xo-scroll" id="desk-inspecte" style="max-height: 16vh">'
             . Vue::inspecteur(null) . '</div>'
-            . '<div class="xo-row" id="desk-gestes" style="margin-top: 8px" hidden>'
-            . '<div class="xo-btn-group" role="group" aria-label="Gestes de desk">' . $gestes . '</div>'
+            /* `xo-row` et non `xo-btn-group` : le groupe est un composant
+               *segmenté*, XOSHUI colle ses boutons exprès (`margin-left: -1px`,
+               et `0` en console) pour qu'ils se lisent comme un seul contrôle à
+               choix unique. Ce n'en est pas un — ce sont huit gestes
+               indépendants, et les coller demandait de viser. `xo-row` porte le
+               `gap` du framework, sans une ligne de style à écrire. */
+            . '<div class="xo-row" id="desk-gestes" role="group"'
+            . ' aria-label="Gestes de desk" style="margin-top: 8px" hidden>'
+            . $gestes
             . '</div>'
             . '</section>';
     }
