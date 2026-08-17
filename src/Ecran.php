@@ -788,8 +788,13 @@ final class Ecran
                alertes, sans changer d'onglet et perdre ce qu'on lisait. Il ne
                défile pas et ne bouge pas — le reste de la colonne s'ajuste. */
             . '<div style="flex: none; margin-top: 8px">'
-            . '<div class="xo-rule xo-rule--start">Outils <span id="desk-outils-compte">'
-            . count($appels) . '</span></div>'
+            /* Le compteur porte un ton, pas seulement un nombre : accent tant
+               qu'un appel est en cours, danger si l'un d'eux a échoué, muet
+               sinon. C'est le seul signal dont on a besoin — il est déjà à
+               l'endroit où l'on va chercher le détail, ce qui évite d'avoir à
+               regarder ailleurs pour savoir s'il faut regarder. */
+            . '<div class="xo-rule xo-rule--start">Outils '
+            . '<span id="desk-outils-compte" class="xo-muted">' . count($appels) . '</span></div>'
             . '<div id="desk-outils">' . Vue::outils($appels) . '</div>'
             . Vue::formulaireOutil()
             . '</div>'

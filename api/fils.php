@@ -73,6 +73,7 @@ try {
     $base = new Base((string) narh_reglage('base_veille'));
     $maintenant = time();
     $alertes = $base->alertes($maintenant - 21600, Alerte::ALERTE, 3);
+    $etatOutils = Memoire::etatOutils($courant);
 
     repondre([
         'ok'       => true,
@@ -82,6 +83,12 @@ try {
         // celle du Newsdesk, pour qu'un rafraîchissement ne change pas l'ordre.
         'veille'   => Vue::lignesEvenements(Ecran::alertesPuisVeille($alertes, $base->arbre([], 12))),
         'outils'   => Vue::outils(Memoire::outils($courant, 20)),
+        /* Le compteur du panneau. Il était lu par le navigateur (`data.compte`)
+           mais n'a jamais été rendu ici : `texte()` écrivait donc la chaîne
+           « undefined » dans l'écran après chaque réponse. `echecs` l'accompagne
+           parce qu'un appel raté ne se voit pas dans un total. */
+        'compte'   => $etatOutils['compte'],
+        'echecs'   => $etatOutils['echecs'],
         // Les trois marquages, avec leurs comptes : un geste de desk change ce
         // que ces onglets montrent, et l'onglet doit pouvoir se recharger seul.
         'suivis'   => Vue::lignesEvenements($base->arbre(['statut' => 'suivi'], 12)),

@@ -74,11 +74,18 @@ try {
 
     $fil = Agent::filId();
 
+    /* `ok: true` dit que la **route** a répondu, pas que l'outil a réussi :
+       `Outils::executer()` rend un échec plutôt que de lever, et cet échec est
+       une trace légitime à conserver. Le compteur, lui, doit distinguer les
+       deux — il annonçait « 2 » d'un ton neutre après un outil raté. */
+    $etat = Memoire::etatOutils($fil);
+
     repondre([
         'ok'     => true,
         'tours'  => Vue::tours(Memoire::messages($fil)),
         'outils' => Vue::outils(Memoire::outils($fil, 20)),
-        'compte' => count(Memoire::outils($fil, 20)),
+        'compte' => $etat['compte'],
+        'echecs' => $etat['echecs'],
     ]);
 } catch (Throwable $e) {
     repondre(['ok' => false, 'erreur' => $e->getMessage()], 500);

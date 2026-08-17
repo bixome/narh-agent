@@ -91,6 +91,45 @@ function duree(ms) {
  *
  * `null` la referme.
  */
+/* --- Le compteur d'outils -------------------------------------------------
+   « Outils N » n'était pas un état mais un nombre, et il ne se rafraîchissait
+   qu'en fin de réponse — jamais pendant qu'un outil tournait. Pire, `compte`
+   n'était pas rendu par `api/fils.php` : l'écran affichait « undefined » après
+   chaque réponse.
+
+   Il porte maintenant l'état, là où l'on va déjà chercher le détail. Trois
+   tons, et pas un de plus — la couleur en porte déjà quatre dans cet écran
+   (marquage, fraîcheur, confirmation, sélection), lui en inventer une
+   cinquième était le vrai risque du bandeau qu'on n'a pas fait.
+
+   Le compte est tenu depuis les événements du flux, qui arrivent déjà, puis
+   réconcilié avec le serveur en fin de réponse. Pas de seconde voie de
+   sondage : `api.php` n'a pas de session, et lui en donner une ferait entrer
+   le sondage en contention avec le flux SSE — PHP verrouille le fichier de
+   session le temps d'une requête. */
+
+const outilsEtat = { compte: 0, echecs: 0, enCours: 0 };
+
+function majOutils({ compte, echecs, enCours } = {}) {
+  if (compte !== undefined) outilsEtat.compte = Number(compte) || 0;
+  if (echecs !== undefined) outilsEtat.echecs = Number(echecs) || 0;
+  if (enCours !== undefined) outilsEtat.enCours = Math.max(0, enCours);
+
+  const cible = document.getElementById('desk-outils-compte');
+  if (!cible) return;
+
+  /* Ce qui tourne prime sur ce qui a raté : pendant un appel, ce qu'on veut
+     savoir est qu'il faut attendre. L'échec se relira juste après. */
+  const [texteCompte, ton] = outilsEtat.enCours > 0
+    ? [`${outilsEtat.compte + outilsEtat.enCours}…`, 'xo-accent']
+    : outilsEtat.echecs > 0
+      ? [`${outilsEtat.compte} · ${outilsEtat.echecs} en échec`, 'xo-danger']
+      : [String(outilsEtat.compte), 'xo-muted'];
+
+  cible.textContent = texteCompte;
+  cible.className = ton;
+}
+
 /* Les gestes en vol.
    Un aller-retour serveur n'est pas instantané, et une commande relancée avant
    sa réponse en fait deux : deux fils neufs, deux oublis. Le spinner le dit,
@@ -605,6 +644,15 @@ async function appelerFils(action = 'etat', id = 0) {
     // les jetons relus en base, la fenêtre du modèle chez Ollama.
     remplir('jauge-contexte', data.contexte);
 
+    /* Le poste de commande, ici et non chez les appelants : il ne se refaisait
+       qu'après un lancement **manuel** d'outil, alors qu'une réponse du modèle
+       en appelle plusieurs. Le panneau montrait donc l'avant-dernière question
+       tant qu'on ne lançait rien à la main. `appelerFils()` suit chaque
+       réponse, chaque geste sur les fils et le chargement : c'est le seul
+       endroit qui les voit tous. */
+    if (data.outils !== undefined) remplir('desk-outils', data.outils);
+    majOutils({ compte: data.compte, echecs: data.echecs, enCours: 0 });
+
     /* « chargé » et « en ligne » sont deux choses : un modèle installé mais
        déchargé répond, en payant d'abord son chargement en mémoire. */
     const etatModele = document.getElementById('etat-modele');
@@ -817,13 +865,22 @@ async function envoyer(message) {
 
         if (ev.type === 'jeton') jetonAttente(attente, ev.texte);
         else if (ev.type === 'phase') phaseAttente(attente, ev.phase);
-        else if (ev.type === 'outil_appel') phaseAttente(attente, 'outil', ev.nom);
+        else if (ev.type === 'outil_appel') {
+          phaseAttente(attente, 'outil', ev.nom);
+          /* Le compteur bouge dès que l'appel part, pas en fin de réponse : sur
+             une question qui en enchaîne trois, c'est le seul moment où il a
+             quelque chose à dire. Le nombre est provisoire — `appelerFils()` le
+             réconcilie avec la base juste après. */
+          majOutils({ enCours: outilsEtat.enCours + 1 });
+        }
         else if (ev.type === 'error') notifier('danger', 'Réponse interrompue', ev.message, 8000);
       }
     }
   } catch (erreur) {
     notifier('danger', 'Agent injoignable', String(erreur.message || erreur), 6000);
   } finally {
+    // Une réponse interrompue laisserait le compteur en « … » indéfiniment.
+    majOutils({ enCours: 0 });
     saisie.disabled = false;
 
     attente?.remove();
@@ -1267,7 +1324,7 @@ async function lancerOutil(nom, valeur) {
 
     poserTours(data.tours);
     remplir('desk-outils', data.outils);
-    texte('desk-outils-compte', data.compte);
+    majOutils({ compte: data.compte, echecs: data.echecs, enCours: 0 });
   } catch (erreur) {
     notifier('danger', 'Outil impossible', String(erreur.message || erreur), 5000);
   } finally {

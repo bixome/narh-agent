@@ -281,6 +281,33 @@ final class Memoire
      *
      * @return list<array{outil: string, arguments: array, ok: bool, resultat: mixed, quand: int, heure: string}>
      */
+    /**
+     * Ce que le compteur « Outils » doit dire, sans rendre la liste.
+     *
+     * `outils()` décode soixante messages pour bâtir un poste de commande ;
+     * le compteur n'a besoin que de deux nombres, et il se rafraîchit bien plus
+     * souvent que le panneau. Les séparer évite de payer le rendu complet à
+     * chaque fois qu'on veut seulement savoir s'il s'est passé quelque chose.
+     *
+     * Les échecs comptent à part : un outil qui a échoué ne se voit pas dans un
+     * total, et c'est pourtant la seule chose du panneau qui demande qu'on aille
+     * y regarder.
+     *
+     * @return array{compte: int, echecs: int}
+     */
+    public static function etatOutils(int $filId): array
+    {
+        $appels = self::outils($filId, 60);
+        $echecs = 0;
+        foreach ($appels as $a) {
+            if (!$a['ok']) {
+                $echecs++;
+            }
+        }
+
+        return ['compte' => count($appels), 'echecs' => $echecs];
+    }
+
     public static function outils(int $filId, int $limite = 20): array
     {
         $st = self::pdo()->prepare(
