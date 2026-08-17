@@ -34,6 +34,19 @@ try {
         'ouvrir'  => Agent::filOuvrir($id),
         'neuf'    => Agent::filNeuf(),
         'oublier' => (function () use ($id): void {
+            /* La seule suppression de l'application, et elle n'avait aucune
+               garde : `Memoire::filSupprimer()` était appelée avec ce que le
+               navigateur envoyait. Le geste vivait dans la même barre que sept
+               gestes de veille, si bien qu'une dépêche sélectionnée y expédiait
+               son identifiant d'**article**. Que les fils s'arrêtent à quelques
+               dizaines et les dépêches commencent à douze mille est un accident
+               d'intervalles, pas une protection : la première dépêche portant un
+               numéro bas aurait effacé une conversation, en cascade sur ses
+               messages, sans rien à l'écran pour le dire. */
+            if ($id <= 0 || !Memoire::filExiste($id)) {
+                repondre(['ok' => false, 'erreur' => "Aucun fil #$id à oublier."], 404);
+            }
+
             Memoire::filSupprimer($id);
             Journal::noter('warn', 'agent', "fil #$id oublié");
             // Supprimer celui qu'on lisait laisse un pointeur mort : on repart

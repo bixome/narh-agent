@@ -29,10 +29,23 @@ final class Ecran
      * coup dans les trois portes, et aucune ne peut proposer un geste que les
      * autres ignorent.
      *
-     * `surLigne` dit si la commande vise l'élément sélectionné dans une tuile :
-     * le menu contextuel ne montre que celles-là. La phase, quand elle est là,
-     * dit que la commande n'est pas branchée — l'écran doit le dire au lieu de
-     * faire semblant.
+     * `natures` dit **sur quoi** la commande agit — vide si elle ne vise aucune
+     * ligne. Ce fut longtemps un simple booléen « surLigne », et c'était la
+     * cause d'une famille entière de défauts : les huit gestes s'affichaient dès
+     * qu'une ligne était choisie, quelle qu'elle soit, alors que cinq natures
+     * différentes sont sélectionnables (dépêche, événement, fil, fait, passage).
+     *
+     * Les conséquences se lisaient mal parce qu'elles ne levaient rien :
+     * `suivre` sur une ligne de **fil** envoyait l'identifiant du fil à une
+     * route qui attend celui d'une dépêche, résolvait son groupe et marquait un
+     * sujet sans rapport — une corruption silencieuse, pas une erreur. Et
+     * `oublier`, seul geste de conversation au milieu de sept gestes de veille,
+     * proposait de supprimer un fil sur une dépêche.
+     *
+     * Déclarer les natures ici les fait respecter partout d'un coup : la barre
+     * de gestes, le menu contextuel et le repli de `commander()` lisent la même
+     * table. La phase, quand elle est là, dit que la commande n'est pas branchée
+     * — l'écran doit le dire au lieu de faire semblant.
      *
      * L'icône est celle du **rôle**, pas du dessin (voir `tools/icones.php`) :
      * une commande la porte partout où elle apparaît, palette et clic droit
@@ -42,28 +55,30 @@ final class Ecran
      * l'événement » y répéterait « l'événement » sept fois de suite, alors que
      * la ligne visée est nommée juste à côté.
      *
-     * clé => [libellé, surLigne, phase, groupe, icône, court]
+     * clé => [libellé, natures, phase, groupe, icône, court]
      */
     public const COMMANDES = [
-        'direct'       => ['Passer en agent en direct',  false, '',   'Régime', 'direct', ''],
-        'conversation' => ['Revenir en conversation',    false, '',   'Régime', 'antenne-fin', ''],
-        'veille'       => ['Ouvrir la veille',           false, '',   'Tuiles', 'veille', ''],
-        'alertes'      => ['Voir les alertes',           false, '',   'Tuiles', 'alerte', ''],
-        'journal'      => ['Voir le journal',            false, '',   'Tuiles', 'journal', ''],
-        'memoire'      => ['Voir les fils passés',       false, '',   'Tuiles', 'memoire', ''],
-        'corpus'       => ['Chercher dans le corpus',    false, '',   'Tuiles', 'chercher', ''],
-        'inspecter'    => ['Inspecter la ligne',         true,  '',   'Tuiles', 'inspecter', 'inspecter'],
-        'suivi'        => ["Suivre l'événement",         true,  '',   'Veille', 'suivre', 'suivre'],
-        'traite'       => ['Marquer traité',             true,  '',   'Veille', 'traite', 'traité'],
-        'ecarte'       => ['Écarter',                    true,  '',   'Veille', 'ecarter', 'écarter'],
-        'lire'         => ['Lire le texte ici',          true,  '',   'Veille', 'inspecter', 'lire'],
-        'ouvrir'       => ["Ouvrir l'article",           true,  '',   'Veille', 'ouvrir', 'ouvrir'],
-        'interroger'   => ["Interroger l'agent dessus",  true,  '',   'Veille', 'interroger', 'demander'],
-        'relever'      => ['Relever maintenant',         false, '',   'Veille', 'relever', ''],
-        'desancrer'    => ['Oublier la dépêche visée',   false, '',   'Conversation', 'ecarter', ''],
-        'fil-neuf'     => ['Ouvrir un fil neuf',         false, '',   'Conversation', 'fil-neuf', ''],
-        'oublier'      => ['Oublier le fil',             true,  '',   'Conversation', 'oublier', 'oublier'],
-        'quart'        => ['Écrire la note de quart',    false, '',   'Conversation', 'journal', ''],
+        'direct'       => ['Passer en agent en direct',  '',                  '', 'Régime', 'direct', ''],
+        'conversation' => ['Revenir en conversation',    '',                  '', 'Régime', 'antenne-fin', ''],
+        'veille'       => ['Ouvrir la veille',           '',                  '', 'Tuiles', 'veille', ''],
+        'alertes'      => ['Voir les alertes',           '',                  '', 'Tuiles', 'alerte', ''],
+        'journal'      => ['Voir le journal',            '',                  '', 'Tuiles', 'journal', ''],
+        'memoire'      => ['Voir les fils passés',       '',                  '', 'Tuiles', 'memoire', ''],
+        'corpus'       => ['Chercher dans le corpus',    '',                  '', 'Tuiles', 'chercher', ''],
+        'inspecter'    => ['Inspecter la ligne',         'depeche evenement', '', 'Tuiles', 'inspecter', 'inspecter'],
+        'suivi'        => ["Suivre l'événement",         'depeche evenement', '', 'Veille', 'suivre', 'suivre'],
+        'traite'       => ['Marquer traité',             'depeche evenement', '', 'Veille', 'traite', 'traité'],
+        'ecarte'       => ['Écarter',                    'depeche evenement', '', 'Veille', 'ecarter', 'écarter'],
+        'lire'         => ['Lire le texte ici',          'depeche evenement', '', 'Veille', 'inspecter', 'lire'],
+        // `passage` aussi : un extrait de corpus porte le lien de son article,
+        // et l'ouvrir marchait déjà — par accident. Ici c'est déclaré.
+        'ouvrir'       => ["Ouvrir l'article",           'depeche evenement passage', '', 'Veille', 'ouvrir', 'ouvrir'],
+        'interroger'   => ["Interroger l'agent dessus",  'depeche evenement', '', 'Veille', 'interroger', 'demander'],
+        'relever'      => ['Relever maintenant',         '',                  '', 'Veille', 'relever', ''],
+        'desancrer'    => ['Oublier la dépêche visée',   '',                  '', 'Conversation', 'ecarter', ''],
+        'fil-neuf'     => ['Ouvrir un fil neuf',         '',                  '', 'Conversation', 'fil-neuf', ''],
+        'oublier'      => ['Oublier le fil',             'fil',               '', 'Conversation', 'oublier', 'oublier'],
+        'quart'        => ['Écrire la note de quart',    '',                  '', 'Conversation', 'journal', ''],
     ];
 
     /**
@@ -288,7 +303,7 @@ final class Ecran
             (int) @filemtime(NARH_RACINE . '/libs/css/xoshui.css'),
         );
 
-        $surLigne = array_filter(self::COMMANDES, static fn (array $cmd): bool => $cmd[1] === true);
+        $surLigne = array_filter(self::COMMANDES, static fn (array $cmd): bool => $cmd[1] !== '');
         $mortes = (int) ($stats['sources']['mortes'] ?? 0);
         $antenne = Direct::enAntenne();
 
@@ -326,6 +341,14 @@ final class Ecran
      data-phases="<?= e((string) json_encode(array_map(
          static fn (array $cmd): string => $cmd[2],
          array_filter(self::COMMANDES, static fn (array $cmd): bool => $cmd[2] !== ''),
+     ), JSON_UNESCAPED_UNICODE | JSON_FORCE_OBJECT)) ?>"
+     <?php /* Sur quoi chaque commande agit. La barre et le menu filtrent déjà
+              par `data-natures`, mais la palette et le champ n'ont pas d'élément
+              porteur : sans cette table, `/oublier` tapé au champ pendant qu'une
+              dépêche est choisie repartait vers la suppression d'un fil. */ ?>
+     data-natures="<?= e((string) json_encode(array_map(
+         static fn (array $cmd): string => $cmd[1],
+         array_filter(self::COMMANDES, static fn (array $cmd): bool => $cmd[1] !== ''),
      ), JSON_UNESCAPED_UNICODE | JSON_FORCE_OBJECT)) ?>"
      data-antenne="<?= $antenne ? '1' : '0' ?>"
      data-budget="<?= Direct::BUDGET ?>"
@@ -465,8 +488,14 @@ final class Ecran
      visible à la fois. narh.js répond à `xo:menu`, XOSHUI ne décide de rien. -->
 <div class="xo-menu" id="menu-narh" role="menu" hidden>
   <div class="xo-menu__titre"></div>
-  <?php foreach ($surLigne as $cle => [$texte, , $phase, , $icone]): ?>
-  <button class="xo-menu__item" role="menuitem" type="button" data-action="<?= e($cle) ?>">
+  <?php /* `data-natures` : le menu est déclaré une seule fois pour tout
+           l'écran, mais il s'ouvre sur cinq natures de ligne différentes. Sans
+           ce filtre, il proposait « suivre » sur un fil de conversation et
+           « oublier » sur une dépêche. `narh.js` masque au moment de l'ouvrir —
+           le serveur ne peut pas savoir sur quoi on va cliquer. */ ?>
+  <?php foreach ($surLigne as $cle => [$texte, $natures, $phase, , $icone]): ?>
+  <button class="xo-menu__item" role="menuitem" type="button" data-action="<?= e($cle) ?>"
+          data-natures="<?= e($natures) ?>">
     <?= Icone::rendre($icone) ?> <?= e($texte) ?>
   </button>
   <?php endforeach; ?>
@@ -657,8 +686,8 @@ final class Ecran
         /* Les gestes qui visent une ligne, dans l'ordre où un desk les
            enchaîne : on regarde, on décide, on ouvre, on interroge. */
         $gestes = '';
-        foreach (self::COMMANDES as $cle => [$texte, $surLigne, $phase, , $icone, $court]) {
-            if (!$surLigne) {
+        foreach (self::COMMANDES as $cle => [$texte, $natures, $phase, , $icone, $court]) {
+            if ($natures === '') {
                 continue;
             }
             /* Le verbe est écrit, pas seulement dessiné : une rangée d'icônes
@@ -666,6 +695,7 @@ final class Ecran
                en mode console les crochets `[ suivre ]` coûtent quatre
                caractères de plus pour un geste qu'on lit du premier coup. */
             $gestes .= '<button class="xo-btn xo-btn--ghost" type="button" data-action="' . e($cle) . '"'
+                . ' data-natures="' . e($natures) . '"'
                 . ' data-xo-tip="' . e($texte) . '">'
                 . Icone::rendre($icone) . ' ' . e($court) . '</button>';
         }

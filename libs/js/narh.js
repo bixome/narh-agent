@@ -38,6 +38,17 @@ const phases = (() => {
     return {};
   }
 })();
+
+/* Sur quoi chaque commande agit, telle que `Ecran::COMMANDES` le déclare. La
+   barre et le menu filtrent par `data-natures` porté sur leurs boutons ; la
+   palette et le champ n'ont pas d'élément porteur, d'où cette table. */
+const natures = (() => {
+  try {
+    return JSON.parse(app?.dataset.natures || '{}');
+  } catch {
+    return {};
+  }
+})();
 const saisie = document.getElementById('chat-saisie');
 
 /* --- Menus --------------------------------------------------------------- */
@@ -230,6 +241,32 @@ async function commander(action, item = null, porte = 'inconnue', argument = '')
   if (!action) return;
 
   const cible = selection(item);
+
+  /* La dernière porte, celle qu'aucun filtre d'affichage ne couvre : la palette
+     et le champ n'ont pas d'élément à filtrer, et `/oublier` tapé pendant qu'une
+     dépêche est choisie repartait vers la suppression d'un fil — sur
+     l'identifiant d'un article, donc sur un fil qui n'a rien à voir.
+
+     On refuse en nommant ce qu'il aurait fallu choisir : « rien de sélectionné »
+     laissait croire à un oubli de clic alors que la ligne était bien là, mais de
+     la mauvaise nature. */
+  const attendues = natures[action];
+  if (attendues !== undefined) {
+    const dit = { depeche: 'une dépêche', evenement: 'un événement', fil: 'un fil', passage: 'un passage' };
+    const liste = attendues.split(/\s+/);
+
+    if (!cible) {
+      notifier('info', 'Aucune ligne visée',
+        `« ${action} » demande ${liste.map((n) => dit[n] ?? n).join(' ou ')}.`, 4000);
+      return;
+    }
+    if (!liste.includes(cible.dataset.nature)) {
+      notifier('info', 'Pas la bonne ligne',
+        `« ${action} » demande ${liste.map((n) => dit[n] ?? n).join(' ou ')}, `
+        + `pas ${dit[cible.dataset.nature] ?? cible.dataset.nature}.`, 5000);
+      return;
+    }
+  }
 
   switch (action) {
     /* -- Le régime -- */
@@ -463,6 +500,29 @@ async function commander(action, item = null, porte = 'inconnue', argument = '')
 
 /* Les trois portes. */
 
+/* Le menu contextuel est déclaré **une seule fois** pour tout l'écran — un menu
+   par ligne multiplierait le balisage par trois cents pour un menu visible à la
+   fois. Mais il s'ouvre sur cinq natures différentes, et proposait donc
+   « suivre » sur un fil de conversation et « oublier » sur une dépêche.
+
+   On filtre au moment de l'ouverture, en capture : XOSHUI place et montre le
+   menu sur ce même `contextmenu`, et il doit le trouver déjà taillé. */
+document.addEventListener('contextmenu', (e) => {
+  const ligne = e.target.closest('[role="option"]');
+  const menu = document.getElementById('menu-narh');
+  if (!ligne || !menu) return;
+
+  let visibles = 0;
+  for (const item of menu.querySelectorAll('[data-natures]')) {
+    item.hidden = !accepte(item, ligne.dataset.nature);
+    if (!item.hidden) visibles++;
+  }
+
+  /* Un menu vide vaut pas de menu : sur une ligne de journal, aucun geste ne
+     s'applique, et une boîte vide au clic droit passe pour un défaut. */
+  if (visibles === 0) menu.hidden = true;
+}, true);
+
 // 1. Le clic droit sur une ligne : XOSHUI ouvre le menu et émet xo:menu.
 document.addEventListener('xo:menu', (e) => {
   commander(e.detail.action, e.detail.item, 'menu contextuel');
@@ -508,6 +568,22 @@ function majGestes() {
      choisie — plus besoin d'écrire « aucune ligne ». */
   barre.hidden = cible === null;
   if (cible) texte('desk-cible', cible.dataset.libelle ?? '');
+
+  /* Chaque geste ne se montre que sur ce qu'il sait traiter.
+     Les huit s'affichaient sur les cinq natures sélectionnables, et sept n'en
+     acceptent que deux. Ce n'était pas qu'un encombrement : « suivre » sur un
+     fil envoyait son identifiant à une route qui attend celui d'une dépêche,
+     et marquait un sujet sans rapport, sans lever d'erreur. */
+    for (const bouton of barre.querySelectorAll('[data-natures]')) {
+      bouton.hidden = !accepte(bouton, cible?.dataset.nature);
+    }
+}
+
+/** La commande porte-t-elle cette nature ? Déclaré par `Ecran::COMMANDES`. */
+function accepte(element, nature) {
+  if (!nature) return false;
+
+  return (element.dataset.natures || '').split(/\s+/).includes(nature);
 }
 
 /* Choisir une ligne désélectionne toutes les autres, où qu'elles soient : la

@@ -157,7 +157,11 @@ final class Piece
             poids: (int) $g['niveau'],
             meta: $sources > 1 ? '×' . $sources : Util::age((int) ($g['tri'] ?? 0)),
             marque: (string) ($g['statut'] ?? ''),
-            attributs: ['groupe' => (string) (int) $g['id']],
+            attributs: array_filter([
+                'groupe' => (string) (int) $g['id'],
+                // Sans lui, « ouvrir » ne trouvait de lien que dans l'arbre.
+                'lien'   => (string) ($g['article_lien'] ?? $g['depeches'][0]['lien'] ?? ''),
+            ], static fn (string $v): bool => $v !== '' && $v !== '0'),
             pliable: $fils > 0,
             ouvert: $ouvert,
         );

@@ -791,11 +791,19 @@ final class Base
      */
     public function alertes(int $depuis, int $niveauMin = Alerte::ALERTE, int $limite = 12): array
     {
+        /* Le lien de la dépêche de tête voyage avec l'événement : « ouvrir
+           l'article » n'avait rien à ouvrir depuis les alertes, le Newsdesk ou
+           la note de quart, et se rabattait sur un enfant `data-parent` qui
+           n'existe que dans l'arbre. Il répondait donc « déplier l'événement »
+           dans trois listes où rien ne se déplie. */
         $st = $this->pdo->prepare(
             'SELECT g.*, (
                  SELECT a.id FROM article a WHERE a.groupe_id = g.id
                  ORDER BY a.niveau DESC, a.date_tri DESC LIMIT 1
-             ) AS article_id
+             ) AS article_id, (
+                 SELECT a.lien FROM article a WHERE a.groupe_id = g.id
+                 ORDER BY a.niveau DESC, a.date_tri DESC LIMIT 1
+             ) AS article_lien
              FROM groupe g
              WHERE g.dernier >= :depuis AND g.niveau >= :niveau
              ORDER BY g.niveau DESC, g.dernier DESC
