@@ -282,6 +282,7 @@ async function commander(action, item = null, porte = 'inconnue', argument = '')
     case 'alertes':
     case 'journal':
     case 'memoire':
+    case 'conduites':
       await poserTuile(action);
       return;
 

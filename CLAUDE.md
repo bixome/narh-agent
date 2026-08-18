@@ -66,7 +66,17 @@ autres chemins, et ils divergeraient.
 qui rend le méta-agent possible : une commande nommée est journalisable, rejouable
 et **déclenchable par un événement**. Une conduite n'est alors qu'une commande
 existante branchée sur un seuil, un mot ou une maison — aucune mécanique nouvelle
-à écrire.
+à écrire. C'est vérifié : `src/Conduite.php` n'agit jamais lui-même, il joue ce que
+`Ecran::COMMANDES` déclare, et les conduites se déclarent dans
+`config/conduites.php` comme les flux dans `config/sources.php`.
+
+Une commande dit **elle-même** si elle est déclenchable (champ `auto`), comme elle
+dit déjà sur quelles natures elle agit. Ce n'est pas une permission mais une
+capacité : « poser une tuile » n'a aucun sens dans un démon, qui n'a ni
+conversation ouverte ni navigateur. Quatre commandes portent le champ — `suivi`,
+`traite`, `ecarte`, `interroger` — et ce sont exactement celles qui agissent en
+base. Le décider ici plutôt que dans le fichier de conduites évite d'avoir deux
+listes qui divergent au premier ajout.
 
 **7 — Une seule chronologie.** La collecte et l'agent écrivent dans le même
 journal, en base. C'est le seul endroit où l'on verra « alerte à 04:30 → conduite
@@ -276,7 +286,7 @@ marqueur et par l'acteur affiché, jamais par un fond de couleur ni un alignemen
 | **P1** | La veille | Collecteur, `actu.sqlite`, arbre et fil plat sous la coque. ✔ |
 | **P2** | La voix | Ollama, outils, flux SSE, fils en base, conversation. ✔ |
 | **P3** | Le pont | `interroger` depuis une ligne ; sources cliquables vers la veille. ✔ |
-| **P4** | La boucle | Le direct : la veille déclenche la production, l'antenne rend sa note de quart. ✔ |
+| **P4** | La boucle | Le direct : la veille déclenche la production, l'antenne rend sa note de quart. Puis les conduites : un seuil déclenche une commande, et l'agent répond sans qu'on soit là. ✔ |
 | **P5** | La mémoire longue | Corpus FTS5, lecteur d'articles, vérification des liens. ✔ |
 
 Porter la veille avant d'écrire la boucle n'est pas de la prudence : P1 est ce qui
@@ -293,6 +303,7 @@ domicile : sans eux la fusion serait une amputation, pas une absorption.
 |---|---|
 | `bootstrap.php` | Constantes, autoload, réglages, `e()` |
 | `config/reglages.php` | Chemins des deux bases, Ollama, cadences (`reglages.local.php` écrase) |
+| `config/conduites.php` | Ce qui se déclenche tout seul : un seuil, une commande (règle 6) |
 | `index.php` | **La** page — il n'y en a qu'une |
 | `cli.php` | Le démon et les commandes d'exploitation — refuse de tourner hors `PHP_SAPI` cli |
 | `api.php` | L'état de la collecte, le marquage, le cycle à la demande |
@@ -300,6 +311,7 @@ domicile : sans eux la fusion serait une amputation, pas une absorption.
 | `api/tuile.php` | Poser une tuile dans la conversation |
 | `api/direct.php` | L'antenne : ouvrir, servir un segment, fermer sur la note de quart |
 | `src/Direct.php` | La conduite du direct : le panel, la mémoire d'antenne, la cadence |
+| `src/Conduite.php` | La boucle : le crible après cycle, la mémoire des tirs, le fil des briefings |
 | `api/fils.php` | Les fils et l'état du moteur — rendus par `Vue` |
 | `api/liens.php` | La passe de vérification des sources citées — après l'affichage, jamais pendant |
 | `src/Ecran.php` | La coquille : barre d'état, en-tête, conversation, palette |
@@ -361,6 +373,22 @@ domicile : sans eux la fusion serait une amputation, pas une absorption.
   l'écran affiche d'abord, **puis** estompe ce qui ne répond pas.
 - **Le grain du corpus est le paragraphe, pas l'article** — c'est ce qui permet de
   donner au modèle le passage utile plutôt que trois pages.
+- **Une conduite se regarde à blanc avant d'être allumée** : `php cli.php
+  --conduites` dit ce qu'elle prendrait, sans rien écrire. Une conduite qui
+  **retire** — `ecarte` — se livre éteinte : découvrir le lendemain matin un desk
+  vidé de ce qu'on voulait garder ne se rattrape pas, et le fichier livré en
+  contient une pour cette raison. Les conduites s'évaluent **après** le cycle et
+  jamais dedans : la collecte ne pense pas (règle 4).
+- **Une conduite ne tire qu'une fois par événement** (`conduite_vu`), et elle est
+  **réclamée avant d'être jouée** : un échec — Ollama déchargé, groupe disparu —
+  ne doit pas revenir au cycle suivant pour échouer pareil en repayant son délai
+  d'attente. Ce qui s'est passé se lit dans la chronologie, pas dans un compteur
+  de tentatives.
+- **`interroger` est réservé au démon.** Une réponse de modèle prend des secondes,
+  et l'écran évalue les conduites pendant qu'il compose une page. C'est la règle
+  de la lecture hors réponse, au même endroit et pour le même prix : sans démon,
+  ces conduites-là ne tirent pas — et rien ne les retient, elles tireront au
+  premier `--veille`.
 
 ## Pièges déjà rencontrés
 
@@ -408,6 +436,16 @@ Ils ont été payés dans les deux projets d'origine. Ils se transfèrent avec l
 - **Un résultat d'outil rejoué à chaque tour** maintient le sujet chaud : le
   modèle y revient sans qu'on demande rien. Il sort du contexte une fois
   consommé (`Memoire::fermerOutils()`), tout en restant affiché.
+- **`groupe.sources` ne compte pas ce qui ne confirme pas.** Les agrégateurs et le
+  web social sortent du calcul de reprise : un billet social que personne ne
+  relaie vaut **zéro** maison, pas une. Une conduite écrite `maisons: 1` pour dire
+  « au moins lui-même » ne tirait jamais — mesuré : zéro prise sur trois jours, et
+  ce silence-là ne se distingue pas d'un réglage qui marche. D'où `maisons_max`.
+- **Deux conduites tombent souvent sur le même événement** — « alerte confirmée »
+  et « reprise large » y arrivent par deux chemins. La seconde n'avait plus rien à
+  changer mais écrivait quand même sa ligne : deux traces pour un seul effet, dans
+  le seul endroit qui doit rester lisible quand on cherche ce qui s'est passé la
+  nuit. Un marquage sans effet n'est donc ni joué, ni journalisé, ni retenu.
 
 ## Ce qu'on ne recopie pas
 

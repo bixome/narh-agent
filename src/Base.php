@@ -942,22 +942,40 @@ final class Base
     }
 
     /**
-     * La conduite : ce qui est retenu, le plus récent d'abord.
+     * Les événements qu'une conduite peut avoir à prendre.
+     *
+     * Le `vu_dernier` et non le `dernier` : on cherche ce que **nous** avons vu
+     * passer récemment, et `dernier` est une date annoncée par le flux, qui
+     * peut reculer ou mentir. Un flux qui date ses articles de demain ferait
+     * sinon tirer une conduite en boucle.
+     *
+     * La rubrique voyage avec l'événement, prise sur sa dépêche de tête : elle
+     * vit sur la source, et une conduite ne va pas la rechercher elle-même —
+     * une règle, un endroit. Le lien et l'identifiant de tête suivent pour la
+     * même raison que dans `alertes()`.
+     *
+     * Les groupes déjà marqués sortent : un sujet qu'on a écarté à la main ne
+     * doit pas revenir en suivi parce qu'une reprise est arrivée après. Le
+     * geste humain arbitre, la conduite ne le rejoue pas.
      *
      * @return list<array<string, mixed>>
      */
-    public function conduite(int $limite = 20): array
+    public function aConduire(int $depuis, int $limite = 120): array
     {
         $st = $this->pdo->prepare(
             "SELECT g.*, (
                  SELECT a.id FROM article a WHERE a.groupe_id = g.id
                  ORDER BY a.niveau DESC, a.date_tri DESC LIMIT 1
-             ) AS article_id
+             ) AS article_id, (
+                 SELECT s.rubrique FROM article a JOIN source s ON s.id = a.source_id
+                 WHERE a.groupe_id = g.id ORDER BY a.niveau DESC, a.date_tri DESC LIMIT 1
+             ) AS rubrique
              FROM groupe g
-             WHERE g.statut = 'suivi'
-             ORDER BY g.dernier DESC
+             WHERE g.vu_dernier >= :depuis AND g.statut = ''
+             ORDER BY g.niveau DESC, g.vu_dernier DESC
              LIMIT :limite"
         );
+        $st->bindValue('depuis', $depuis, PDO::PARAM_INT);
         $st->bindValue('limite', $limite, PDO::PARAM_INT);
         $st->execute();
 
@@ -1175,7 +1193,7 @@ final class Base
      * santé des flux — fusionnés et triés par instant décroissant.
      *
      * Chaque entrée porte des champs bruts, pas de texte déjà composé : comme
-     * `alertes()` ou `conduite()`, c'est l'appelant qui tronque et met en mots.
+     * `alertes()` ou `aConduire()`, c'est l'appelant qui tronque et met en mots.
      * Seul `categorie` dit quel gabarit appliquer à la ligne.
      *
      * @return list<array<string, mixed>>

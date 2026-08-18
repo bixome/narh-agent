@@ -40,7 +40,7 @@ parler ne demande jamais de faire défiler d'abord.
 | **P1** | La veille — collecteur, `actu.sqlite`, arbre et fil plat | ✔ |
 | **P2** | La voix — Ollama, outils, flux SSE, fils en base | ✔ |
 | **P3** | Le pont — interroger une ligne, remonter aux sources | ✔ |
-| **P4** | La boucle — le direct, la note de quart | ✔ |
+| **P4** | La boucle — le direct, la note de quart, les conduites | ✔ |
 | **P5** | La mémoire longue — corpus FTS5, lecteur, liens | ✔ |
 
 **La fusion est faite.** Ekein-Scrapper et otow-agent ont été absorbés puis
@@ -81,6 +81,22 @@ devient un simple lecteur de la base, et répond en quelques millisecondes.
 
 `--une-fois` pour un seul relevé, `--etat` pour l'état des sources, `--verifier`
 après avoir ajouté un flux, `--rescorer` après avoir touché au lexique.
+
+## Ce qui se déclenche tout seul
+
+Une **conduite** branche une commande déjà nommée sur un seuil, un mot ou un
+nombre de rédactions : trois maisons sur une alerte la mettent en suivi, quatre
+sur un urgent demandent un briefing à l'agent. Elles se déclarent dans
+`config/conduites.php` et s'évaluent après chaque cycle — le démon les joue
+toutes, l'écran seulement celles qui n'attendent pas le modèle.
+
+Avant d'en allumer une, la regarder à blanc : rien n'est écrit.
+
+```bash
+D:\laragon\bin\php\php-8.3.30-Win32-vs16-x64\php.exe cli.php --conduites
+```
+
+`/conduites` dans le champ montre ce qui est armé et ce qui a déjà tiré.
 
 ## Vérifier l'interface
 

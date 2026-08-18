@@ -43,14 +43,18 @@ final class Tuile
     /** Ce que le corpus retient : des passages, pas des titres. */
     public const CORPUS = 'corpus';
 
+    /** Ce qui se déclenche tout seul, et ce que ça a déjà pris (règle 6). */
+    public const CONDUITES = 'conduites';
+
     public const TITRES = [
-        self::VEILLE  => 'Veille',
-        self::DEPECHE => 'Dépêche',
-        self::JOURNAL => 'Journal',
-        self::ALERTES => 'Alertes',
-        self::MEMOIRE => 'Mémoire',
-        self::LECTURE => 'Lecture',
-        self::CORPUS  => 'Corpus',
+        self::VEILLE    => 'Veille',
+        self::DEPECHE   => 'Dépêche',
+        self::JOURNAL   => 'Journal',
+        self::ALERTES   => 'Alertes',
+        self::MEMOIRE   => 'Mémoire',
+        self::LECTURE   => 'Lecture',
+        self::CORPUS    => 'Corpus',
+        self::CONDUITES => 'Conduites',
     ];
 
     /**
@@ -109,6 +113,14 @@ final class Tuile
             self::MEMOIRE => ['fils' => Memoire::fils(30, Agent::filId())],
             self::LECTURE => $this->contenuLecture(),
             self::CORPUS  => $this->contenuCorpus(),
+            /* Les déclarées **et** les tirs : une tuile qui ne montrerait que
+               les tirs serait vide la première nuit, et donnerait à croire que
+               rien n'est armé. Une qui ne montrerait que les déclarations ne
+               dirait jamais si elles servent. */
+            self::CONDUITES => [
+                'declarees' => Conduite::declarees(true),
+                'tirs'      => Conduite::tirs((int) ($this->params['limite'] ?? 20)),
+            ],
             default       => [],
         };
     }

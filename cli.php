@@ -161,6 +161,19 @@ switch ($commande) {
                `journaliserCycle()` le sait déjà — on ne redécide pas ici. */
             Ecran::journaliserCycle($base, $r, 'démon');
 
+            /* La boucle du méta-agent, et c'est ici qu'elle se ferme : ce qui
+               arrive déclenche ce qui pense. Après le cycle, jamais dedans —
+               la collecte ne pense pas (règle 4).
+
+               Le démon est la seule porte qui puisse jouer une conduite coûteuse
+               en modèle : personne n'attend devant un écran, et une réponse de
+               cinq secondes n'y coûte que cinq secondes de sommeil en moins. */
+            foreach (Conduite::evaluer($base, 'démon') as $tir) {
+                ligne(horodate(teinte('conduite ', 'muted') . teinte((string) $tir['dit'], 'bold')
+                    . teinte(' — ' . Util::tronquer((string) $tir['titre'], 50), 'muted')
+                    . ($tir['issue'] === 'fait' ? '' : teinte(' [' . $tir['issue'] . ']', 'warning'))));
+            }
+
             if ($r['saute']) {
                 ligne(horodate(teinte('cycle déjà en cours ailleurs — passe', 'muted')));
             } elseif ($r['sources'] > 0) {
@@ -170,11 +183,17 @@ switch ($commande) {
             // Une purge par heure suffit : elle n'est pas le travail du cycle.
             if (time() - $purge > 3600) {
                 $purge = time();
-                $efface = $base->purger(time() - (int) narh_reglage('retention', 4) * 86400);
+                $limite = time() - (int) narh_reglage('retention', 4) * 86400;
+                $efface = $base->purger($limite);
                 if ($efface > 0) {
                     Journal::noter('info', 'collecte', "purge : $efface dépêches retirées");
                     ligne(horodate(teinte("purge : $efface dépêches retirées", 'muted')));
                 }
+
+                /* La mémoire des conduites suit la rétention de la collecte : se
+                   souvenir d'avoir tiré sur un événement effacé ne protège plus
+                   de rien, et la table grossirait sans fin. */
+                Conduite::oublier($limite);
             }
 
             // On dort jusqu'à la prochaine source échue, jamais moins de 5 s.
@@ -637,6 +656,53 @@ switch ($commande) {
         Journal::noter('ok', 'collecte', "purge à la main : $n dépêches retirées");
         break;
 
+    /* -- Les conduites ---------------------------------------------------
+       À blanc, toujours : cette commande sert à décider si on allume une
+       conduite, pas à la jouer. Une inspection qui agirait serait exactement
+       le piège qu'elle existe pour éviter — allumer « écarter » et découvrir
+       le lendemain un desk vidé de ce qu'on voulait garder. */
+    case '--conduites':
+        titre('Les conduites');
+
+        $declarees = Conduite::declarees(true);
+        if ($declarees === []) {
+            ligne(teinte('  Aucune conduite dans config/conduites.php.', 'muted'));
+            break;
+        }
+
+        foreach ($declarees as $c) {
+            $actif = (bool) ($c['actif'] ?? true);
+            ligne(sprintf(
+                '  %s %s %s %s',
+                teinte($actif ? '»' : '·', $actif ? 'accent' : 'faint'),
+                teinte(pad((string) $c['nom'], 26), $actif ? 'bold' : 'faint'),
+                teinte(pad((string) $c['faire'], 12), 'muted'),
+                teinte($actif ? '' : 'éteinte', 'faint'),
+            ));
+        }
+
+        ligne();
+        ligne(teinte('==> ', 'accent') . teinte('Ce qui tirerait maintenant', 'bold'));
+
+        $tirs = Conduite::evaluer($base, 'à blanc', time(), true);
+        if ($tirs === []) {
+            ligne(teinte('  Rien : aucun événement de la dernière heure ne remplit une condition.', 'muted'));
+            break;
+        }
+
+        foreach ($tirs as $t) {
+            ligne(sprintf(
+                '  %s %s %s',
+                teinte('»', 'warning'),
+                teinte(pad((string) $t['faire'], 12), 'bold'),
+                teinte(Util::tronquer((string) $t['titre'], 58), 'muted'),
+            ));
+        }
+        ligne();
+        ligne(teinte('  Rien n\'a été écrit. `--veille` les jouerait au prochain cycle.', 'faint'));
+        ligne();
+        break;
+
     /* -- Aide ------------------------------------------------------------ */
     default:
         ligne(teinte('NARH ' . NARH_VERSION, 'bold') . teinte(' — méta-agent : la veille et la voix', 'muted'));
@@ -648,6 +714,7 @@ switch ($commande) {
             '--verifier'    => 'contrôler chaque flux et signaler ceux qui ont changé d\'adresse',
             '--fil [n]'     => 'les n dernières dépêches (30 par défaut)',
             '--alertes'     => 'les événements repris par plusieurs rédactions',
+            '--conduites'   => 'ce qui est armé, et ce qui tirerait maintenant — à blanc',
             '--sources'     => 'l\'état du parc, rubrique par rubrique',
             '--etat'        => 'les compteurs',
             '--rescorer'    => 'réévaluer tout le fil après une retouche du lexique ou des seuils',

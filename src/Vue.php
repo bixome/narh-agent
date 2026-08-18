@@ -292,6 +292,92 @@ final class Vue
             . self::lignes($pieces) . '</ul>';
     }
 
+    /**
+     * Les conduites : ce qui est armé, puis ce que ça a pris.
+     *
+     * Deux blocs et pas un, parce qu'ils répondent à deux questions qu'on ne se
+     * pose pas au même moment — « qu'est-ce qui peut partir ? » avant, « qu'a-t-il
+     * fait cette nuit ? » après. Les armées d'abord : la première nuit, la
+     * seconde liste est vide, et une tuile qui n'afficherait que le vide
+     * laisserait croire que rien n'est branché.
+     *
+     * Une conduite déclarée n'est **pas** une pièce : elle n'a ni instant ni
+     * acteur, seulement une condition. La passer par `Vue::ligne()` obligerait à
+     * lui inventer une heure, et `date('H:i', 0)` afficherait 01:00 — une heure
+     * fausse est pire qu'une colonne vide. Elle prend donc la grammaire des
+     * faits établis, `xo-kv`, celle de l'inspecteur.
+     *
+     * Un tir, lui, **est** un fait : il a eu lieu, à une heure, sous un nom.
+     * Il repasse donc par `Piece::fait()`, comme une ligne de journal — c'est la
+     * règle 7 qui veut qu'on le lise au même endroit et de la même façon.
+     *
+     * @param list<array<string, mixed>>                                                       $declarees
+     * @param list<array{quand: int, niveau: string, source: string, message: string, duree: ?int}> $tirs
+     */
+    public static function conduites(array $declarees, array $tirs): string
+    {
+        if ($declarees === []) {
+            return self::vide('inerte', "Aucune conduite déclarée dans config/conduites.php.");
+        }
+
+        $html = '<div class="xo-rule xo-rule--start">Armées</div><dl class="xo-kv">';
+
+        foreach ($declarees as $c) {
+            $actif = (bool) ($c['actif'] ?? true);
+            $verbe = Ecran::COMMANDES[$c['faire']][6] ?? (string) $c['faire'];
+
+            $html .= '<div class="xo-kv__row">'
+                // Une conduite éteinte se lit éteinte : estompée, et le dit en
+                // toutes lettres. Sans la seconde, l'estompe seule passerait
+                // pour du décor — `--xo-faint` ne porte jamais d'information.
+                . '<dt' . ($actif ? '' : ' class="xo-fade"') . '>' . e(self::condition($c)) . '</dt>'
+                . '<span class="xo-kv__leader" aria-hidden="true"></span>'
+                . '<dd class="' . ($actif ? 'xo-muted' : 'xo-fade') . '">'
+                . e($verbe . ($actif ? '' : ' — éteinte')) . '</dd>'
+                . '</div>';
+        }
+
+        $html .= '</dl><div class="xo-rule xo-rule--start">Déclenchées</div>';
+
+        if ($tirs === []) {
+            return $html . self::vide('calme', "Aucune conduite n'a encore eu à tirer.");
+        }
+
+        return $html . '<ul class="xo-list" data-xo-list role="listbox" aria-label="Conduites déclenchées">'
+            . self::lignes(array_map(static fn (array $t): Piece => Piece::fait($t), $tirs))
+            . '</ul>';
+    }
+
+    /**
+     * Le déclencheur, en français.
+     *
+     * Composé ici et non dans `Conduite` : c'est de la mise en mots, et la
+     * classe qui décide rend des données brutes — comme `alertes()`, comme
+     * `saillances()`. Le fichier de conduites reste lisible par une machine,
+     * l'écran le rend lisible par un humain.
+     *
+     * @param array<string, mixed> $c
+     */
+    private static function condition(array $c): string
+    {
+        $bouts = [];
+
+        foreach ((array) ($c['quand'] ?? []) as $cle => $valeur) {
+            $bouts[] = match ($cle) {
+                'niveau'   => 'niveau ' . (Alerte::NOMS[(int) $valeur] ?? (string) $valeur),
+                'maisons'  => (int) $valeur . ' rédaction' . ((int) $valeur > 1 ? 's' : ''),
+                'maisons_max' => (int) $valeur === 0
+                    ? 'aucune reprise'
+                    : 'au plus ' . (int) $valeur . ' rédactions',
+                'rubrique' => Ecran::RUBRIQUES[(string) $valeur] ?? (string) $valeur,
+                'mots'     => '« ' . implode(', ', array_map('strval', (array) $valeur)) . ' »',
+                default    => (string) $cle,
+            };
+        }
+
+        return implode(' + ', $bouts);
+    }
+
     /* ---- Le chat ------------------------------------------------------------
        Structure de chat, pas peau de chat : `xo-timeline` porte les tours,
        la même grammaire que « qui d'autre en parle » dans l'inspecteur, parce
@@ -462,6 +548,8 @@ final class Vue
 
             Tuile::CORPUS => self::corpus($contenu['passages'] ?? [], (string) ($contenu['q'] ?? '')),
 
+            Tuile::CONDUITES => self::conduites($contenu['declarees'] ?? [], $contenu['tirs'] ?? []),
+
             default => self::vide('inconnu', 'Cette tuile ne sait rien montrer.'),
         };
 
@@ -473,6 +561,13 @@ final class Vue
             Tuile::MEMOIRE => count($contenu['fils'] ?? []) . ' fils',
             Tuile::LECTURE => count($contenu['paragraphes'] ?? []) . ' paragraphes',
             Tuile::CORPUS  => count($contenu['passages'] ?? []) . ' passages',
+            // Les armées, pas les déclarées : le compte doit dire ce qui peut
+            // partir. Trois conduites dont deux éteintes annoncerait « 3 » pour
+            // une seule qui tire.
+            Tuile::CONDUITES => count(array_filter(
+                $contenu['declarees'] ?? [],
+                static fn (array $c): bool => (bool) ($c['actif'] ?? true),
+            )) . ' armées',
             default        => '',
         };
 

@@ -54,6 +54,10 @@ const ICONES = [
     'ecarter'     => 'crossed',
     'ouvrir'      => 'external',
     'interroger'  => 'chatbot',
+    // Ce qui part sans qu'on le demande (règle 6). L'éclair et non l'engrenage :
+    // une conduite n'est pas un réglage qu'on tourne, c'est une décharge — elle
+    // tire une fois, sur un seuil, et se lit dans la chronologie.
+    'conduite'    => 'thunderbolt',
     'reglages'    => 'cog',
     'chercher'    => 'magnifier',
     'invite'      => 'code',

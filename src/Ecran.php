@@ -55,30 +55,42 @@ final class Ecran
      * l'événement » y répéterait « l'événement » sept fois de suite, alors que
      * la ligne visée est nommée juste à côté.
      *
-     * clé => [libellé, natures, phase, groupe, icône, court]
+     * `auto` dit qu'une **conduite** peut jouer la commande sans écran (règle 6,
+     * et `src/Conduite.php`). Ce n'est pas une permission mais une capacité :
+     * « poser une tuile » ou « basculer l'antenne » n'ont aucun sens dans un
+     * démon, qui n'a ni conversation ouverte ni navigateur. Le champ est donc
+     * rempli pour les quatre commandes qui agissent en base et pour elles
+     * seules — le déclarer ici, comme `natures`, évite d'avoir à le redécider
+     * dans `config/conduites.php`, où il divergerait au premier ajout.
+     *
+     * clé => [libellé, natures, phase, groupe, icône, court, auto]
      */
     public const COMMANDES = [
-        'direct'       => ['Passer en agent en direct',  '',                  '', 'Régime', 'direct', ''],
-        'conversation' => ['Revenir en conversation',    '',                  '', 'Régime', 'antenne-fin', ''],
-        'veille'       => ['Ouvrir la veille',           '',                  '', 'Tuiles', 'veille', ''],
-        'alertes'      => ['Voir les alertes',           '',                  '', 'Tuiles', 'alerte', ''],
-        'journal'      => ['Voir le journal',            '',                  '', 'Tuiles', 'journal', ''],
-        'memoire'      => ['Voir les fils passés',       '',                  '', 'Tuiles', 'memoire', ''],
-        'corpus'       => ['Chercher dans le corpus',    '',                  '', 'Tuiles', 'chercher', ''],
-        'inspecter'    => ['Inspecter la ligne',         'depeche evenement', '', 'Tuiles', 'inspecter', 'inspecter'],
-        'suivi'        => ["Suivre l'événement",         'depeche evenement', '', 'Veille', 'suivre', 'suivre'],
-        'traite'       => ['Marquer traité',             'depeche evenement', '', 'Veille', 'traite', 'traité'],
-        'ecarte'       => ['Écarter',                    'depeche evenement', '', 'Veille', 'ecarter', 'écarter'],
-        'lire'         => ['Lire le texte ici',          'depeche evenement', '', 'Veille', 'inspecter', 'lire'],
+        'direct'       => ['Passer en agent en direct',  '',                  '', 'Régime', 'direct', '', ''],
+        'conversation' => ['Revenir en conversation',    '',                  '', 'Régime', 'antenne-fin', '', ''],
+        'veille'       => ['Ouvrir la veille',           '',                  '', 'Tuiles', 'veille', '', ''],
+        'alertes'      => ['Voir les alertes',           '',                  '', 'Tuiles', 'alerte', '', ''],
+        'journal'      => ['Voir le journal',            '',                  '', 'Tuiles', 'journal', '', ''],
+        'conduites'    => ['Voir ce qui se déclenche',   '',                  '', 'Tuiles', 'conduite', '', ''],
+        'memoire'      => ['Voir les fils passés',       '',                  '', 'Tuiles', 'memoire', '', ''],
+        'corpus'       => ['Chercher dans le corpus',    '',                  '', 'Tuiles', 'chercher', '', ''],
+        'inspecter'    => ['Inspecter la ligne',         'depeche evenement', '', 'Tuiles', 'inspecter', 'inspecter', ''],
+        'suivi'        => ["Suivre l'événement",         'depeche evenement', '', 'Veille', 'suivre', 'suivre', 'marque le groupe suivi'],
+        'traite'       => ['Marquer traité',             'depeche evenement', '', 'Veille', 'traite', 'traité', 'marque le groupe traité'],
+        'ecarte'       => ['Écarter',                    'depeche evenement', '', 'Veille', 'ecarter', 'écarter', 'écarte le groupe du desk'],
+        'lire'         => ['Lire le texte ici',          'depeche evenement', '', 'Veille', 'inspecter', 'lire', ''],
         // `passage` aussi : un extrait de corpus porte le lien de son article,
         // et l'ouvrir marchait déjà — par accident. Ici c'est déclaré.
-        'ouvrir'       => ["Ouvrir l'article",           'depeche evenement passage', '', 'Veille', 'ouvrir', 'ouvrir'],
-        'interroger'   => ["Interroger l'agent dessus",  'depeche evenement', '', 'Veille', 'interroger', 'demander'],
-        'relever'      => ['Relever maintenant',         '',                  '', 'Veille', 'relever', ''],
-        'desancrer'    => ['Oublier la dépêche visée',   '',                  '', 'Conversation', 'ecarter', ''],
-        'fil-neuf'     => ['Ouvrir un fil neuf',         '',                  '', 'Conversation', 'fil-neuf', ''],
-        'oublier'      => ['Oublier le fil',             'fil',               '', 'Conversation', 'oublier', 'oublier'],
-        'quart'        => ['Écrire la note de quart',    '',                  '', 'Conversation', 'journal', ''],
+        'ouvrir'       => ["Ouvrir l'article",           'depeche evenement passage', '', 'Veille', 'ouvrir', 'ouvrir', ''],
+        // Seule commande `auto` qui coûte des secondes de modèle : `Conduite`
+        // la réserve au démon pour cette raison, pas parce qu'elle serait
+        // moins légitime que les trois autres.
+        'interroger'   => ["Interroger l'agent dessus",  'depeche evenement', '', 'Veille', 'interroger', 'demander', "demande un briefing à l'agent"],
+        'relever'      => ['Relever maintenant',         '',                  '', 'Veille', 'relever', '', ''],
+        'desancrer'    => ['Oublier la dépêche visée',   '',                  '', 'Conversation', 'ecarter', '', ''],
+        'fil-neuf'     => ['Ouvrir un fil neuf',         '',                  '', 'Conversation', 'fil-neuf', '', ''],
+        'oublier'      => ['Oublier le fil',             'fil',               '', 'Conversation', 'oublier', 'oublier', ''],
+        'quart'        => ['Écrire la note de quart',    '',                  '', 'Conversation', 'journal', '', ''],
     ];
 
     /**
@@ -125,6 +137,19 @@ final class Ecran
         if ($amorce || (narh_reglage('collecte_web', true) && $collecteur->perime($maintenant) && !Collecteur::occupe())) {
             $rapport = $collecteur->cycle($amorce, $amorce ? 45 : (int) narh_reglage('cycle_max', 15));
             self::journaliserCycle($base, $rapport, 'écran');
+
+            /* Après le cycle et non dedans : la collecte ne pense pas (règle 4),
+               le collecteur rend un rapport et ignore ce qu'on en fait — c'est
+               ce qui permet de l'appeler d'ici, du CLI ou de l'API. Ici comme
+               pour le journal, et pour la même raison.
+
+               Depuis l'écran aussi, et pas seulement depuis le démon : sans
+               démon, l'écran est le seul endroit où un cycle a lieu, et des
+               conduites qui ne tireraient jamais dans cette configuration
+               seraient un réglage qu'on croit armé. Celles qui coûtent des
+               secondes de modèle se réservent elles-mêmes (Conduite). */
+            Conduite::evaluer($base, 'écran', time());
+
             $maintenant = time();
             $stats = $base->stats($maintenant);
         }
