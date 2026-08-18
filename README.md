@@ -50,9 +50,9 @@ apparaître, est dans **[docs/fusion.md](docs/fusion.md)**.
 
 | | |
 |---|---|
-| Collecte | 10 124 dépêches · 7 673 événements · 59 sources |
-| Corpus | 342 articles lus · 4 123 passages |
-| Conversation | 26 fils · 173 tours |
+| Collecte | 15 427 dépêches · 11 501 événements · 59 sources |
+| Corpus | 562 articles lus · 4 262 passages |
+| Conversation | 38 fils · 365 tours |
 
 ## Lancer
 
