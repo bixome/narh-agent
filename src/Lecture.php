@@ -48,6 +48,53 @@ final class Lecture
     }
 
     /**
+     * Interroger un service **déclaré dans les réglages**, et rien d'autre.
+     *
+     * `adresseSure()` refuse les plages privées, et elle a raison : elle garde
+     * une URL qui vient d'un flux, d'un modèle, d'une redirection — c'est-à-dire
+     * de l'extérieur. Une requête sortante y devient une requête vers
+     * l'intérieur du réseau, et c'est par là qu'on lit une console
+     * d'administration depuis le web.
+     *
+     * Un métamoteur qu'on héberge soi-même est le cas exactement inverse, et
+     * c'est pourquoi il passe par une porte séparée plutôt que par un
+     * assouplissement de l'autre : l'hôte vient de `config/reglages.php`, jamais
+     * d'une réponse. Le modèle ne fournit que des **paramètres**, encodés ici.
+     * Il ne peut donc ni choisir la machine, ni le port, ni le chemin — la seule
+     * chose qu'il gouverne est le texte d'une requête.
+     *
+     * Aucune redirection n'est suivie : un service local qui redirige ailleurs
+     * n'est plus le service qu'on a déclaré.
+     *
+     * @param  array<string, string|int> $parametres
+     */
+    public static function service(string $base, array $parametres, int $timeout = 8): ?string
+    {
+        $p = parse_url($base);
+        if (!in_array($p['scheme'] ?? '', ['http', 'https'], true) || ($p['host'] ?? '') === '') {
+            return null;
+        }
+
+        $url = $base . (str_contains($base, '?') ? '&' : '?') . http_build_query($parametres);
+
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER   => true,
+            CURLOPT_FOLLOWLOCATION   => false,
+            CURLOPT_TIMEOUT          => $timeout,
+            CURLOPT_CONNECTTIMEOUT   => 3,
+            CURLOPT_USERAGENT        => 'NARH/' . NARH_VERSION,
+            CURLOPT_NOPROGRESS       => false,
+            CURLOPT_PROGRESSFUNCTION => static fn ($r, $recu) => $recu > self::TAILLE_MAX ? 1 : 0,
+        ]);
+        $corps = curl_exec($ch);
+        $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        return (is_string($corps) && $corps !== '' && $code === 200) ? $corps : null;
+    }
+
+    /**
      * Le document, redirections suivies à la main.
      *
      * `FOLLOWLOCATION` aurait obéi sans broncher à un « Location: http://10.0.0.1/ » :

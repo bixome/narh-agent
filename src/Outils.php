@@ -20,7 +20,7 @@ final class Outils
     /** @return list<array{type: string, function: array}> */
     public static function definitions(): array
     {
-        return [
+        $definitions = [
             [
                 'type' => 'function',
                 'function' => [
@@ -125,6 +125,30 @@ final class Outils
                     ],
                 ],
             ],
+            /* La seule fenêtre sur ce que la veille n'apporte pas. Présentée en
+               dernier recours, et le texte le dit au modèle : la veille est
+               faite de sources choisies, dont on connaît la maison ; le web
+               ouvert n'est qu'une piste. Sans cette hiérarchie écrite ici, un
+               modèle qui dispose des deux prend le web par réflexe — c'est plus
+               large, donc ça paraît mieux. */
+            [
+                'type' => 'function',
+                'function' => [
+                    'name' => 'chercher_web',
+                    'description' => "Cherche sur le web ouvert, via un métamoteur local. À n'utiliser que si la "
+                        . "veille ne couvre pas le sujet : ce qui revient d'ici n'est pas vérifié et ne vient pas "
+                        . "d'une source connue. Ne jamais présenter un résultat comme une dépêche ; citer le lien "
+                        . 'et dire qu\'il vient d\'une recherche.',
+                    'parameters' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'requete' => ['type' => 'string', 'description' => 'Ce qu\'on cherche, en mots-clés'],
+                            'limite'  => ['type' => 'integer', 'description' => 'Nombre de résultats, 5 par défaut, 10 maximum'],
+                        ],
+                        'required' => ['requete'],
+                    ],
+                ],
+            ],
             [
                 'type' => 'function',
                 'function' => [
@@ -136,6 +160,20 @@ final class Outils
                 ],
             ],
         ];
+
+        /* Un outil éteint ne se présente pas. Le laisser dans le catalogue en
+           lui faisant rendre « aucun résultat » serait pire que de l'ôter : le
+           modèle lit le catalogue pour savoir ce qu'il sait faire, et il
+           répondrait qu'il cherche sur le web à qui le lui demande — puis ne
+           trouverait jamais rien, sans pouvoir dire pourquoi. */
+        if (!Recherche::activee()) {
+            $definitions = array_values(array_filter(
+                $definitions,
+                static fn (array $d): bool => ($d['function']['name'] ?? '') !== 'chercher_web',
+            ));
+        }
+
+        return $definitions;
     }
 
     /**
@@ -237,6 +275,10 @@ final class Outils
                     (int) ($arguments['limite'] ?? 5),
                     'social',
                 )],
+                'chercher_web'    => ['ok' => true, 'resultat' => Recherche::chercher(
+                    (string) ($arguments['requete'] ?? ''),
+                    (int) ($arguments['limite'] ?? 5),
+                )],
                 'etat_veille'     => ['ok' => true, 'resultat' => self::etatVeille()],
                 default => ['ok' => false, 'resultat' => "Outil inconnu : $nom"],
             };
@@ -270,6 +312,26 @@ final class Outils
         }
         if (!is_array($resultat) || $resultat === []) {
             return 'Aucun résultat.';
+        }
+
+        if ($nom === 'chercher_web') {
+            $lignes = [];
+            foreach ($resultat as $r) {
+                /* Le lien est donné en entier : c'est la seule chose qui rende
+                   le résultat vérifiable, et le modèle écorche une URL qu'il
+                   doit reconstruire. Le moteur d'origine est nommé — il tient
+                   ici le rôle que la maison tient pour une dépêche. */
+                $lignes[] = sprintf(
+                    "- %s\n  %s\n  %s%s",
+                    $r['titre'] ?? '?',
+                    $r['lien'] ?? '',
+                    $r['extrait'] ?? '',
+                    ($r['moteur'] ?? '') !== '' ? "\n  [trouvé via " . $r['moteur'] . ']' : '',
+                );
+            }
+
+            return count($resultat) . " résultats de recherche web — non vérifiés, hors veille :\n"
+                . implode("\n", $lignes);
         }
 
         if ($nom === 'chercher_corpus') {

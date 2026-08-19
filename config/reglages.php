@@ -122,6 +122,35 @@ return [
        `ia_lot` borne le passage : juger 7 600 événements d'un coup demanderait
        des heures à un modèle local pour un avis qui, par construction, ne
        décide de rien. */
+    /* ---- La recherche sur le web ouvert -----------------------------------
+       NARH ne voit que ce que ses flux lui apportent : un sujet qu'aucune
+       source ne couvre n'existe pas pour lui, et il ne peut pas s'en rendre
+       compte. `chercher_web` est sa seule fenêtre au-delà.
+
+       Le point d'accès est **le seul endroit** d'où sort une adresse non
+       vérifiée par `Lecture::adresseSure()` — c'est un service qu'on héberge,
+       donc une plage privée. Il vient d'ici et jamais d'une réponse : le modèle
+       ne fournit que le texte de la requête (voir `Lecture::service()`).
+
+       Vide, l'outil n'est pas présenté au modèle du tout. Un catalogue qui
+       annonce une capacité absente est pire qu'un catalogue plus court : le
+       modèle répond qu'il sait chercher, puis ne trouve rien.
+
+       SearXNG plutôt qu'une API commerciale : le projet ne charge aucun tiers
+       dans l'écran et récupère tout côté serveur. Confier les requêtes de la
+       rédaction à un moteur qui les identifie par une clé contredirait cette
+       posture au moment même où l'on ouvre la porte.
+
+           'point' => 'http://127.0.0.1:8888/search',
+
+       Le service doit autoriser le format JSON (`search.formats` dans son
+       settings.yml : SearXNG ne sert que du HTML par défaut). */
+    'recherche' => [
+        'point'   => '',
+        'langue'  => 'fr',
+        'timeout' => 8,
+    ],
+
     /* ---- La réconciliation par vecteurs ----------------------------------
        Ce que le Jaccard ne sait pas voir : deux rédactions qui couvrent le même
        événement sans partager assez de mots. Mesuré sur cette base, avant
