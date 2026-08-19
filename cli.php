@@ -15,6 +15,8 @@ declare(strict_types=1);
  *   php cli.php --sources       l'état du parc
  *   php cli.php --etat          les compteurs
  *   php cli.php --rescorer      réévaluer le fil après retouche du lexique
+ *   php cli.php --fusionner     réunir les événements que les mots ont séparés
+ *   php cli.php --fusionner --simuler   les montrer sans rien changer
  *   php cli.php --enrichir-ia   le second avis du modèle local
  *   php cli.php --ingerer 20    lire vingt articles et en ranger le texte
  *   php cli.php --ingerer --etat      ce que contient le corpus
@@ -374,6 +376,54 @@ switch ($commande) {
        Hors du cycle : Ollama répond en secondes et n'est pas toujours lancé,
        le mêler au relevé mettrait le budget du cycle à la merci d'un service
        éteint. Et ne se planifie pas — voir CLAUDE.md, règles du projet. */
+    case '--fusionner':
+        /* La réconciliation : réunir les événements que le Jaccard a laissés
+           séparés parce que deux rédactions n'emploient pas les mêmes mots.
+
+           Hors cycle, comme `--enrichir-ia`, mais pour une autre raison : ce
+           n'est pas un avis, c'est une mesure — le même titre redonne toujours
+           le même vecteur. Ce qui l'écarte du cycle est le coût : un appel
+           d'embedding demande 400 ms d'ouverture quel que soit le nombre de
+           titres, et le collecteur traite les dépêches une par une.
+
+           Contrairement à `--enrichir-ia`, celle-ci **modifie la veille** :
+           elle déplace des dépêches et supprime des groupes vidés. D'où
+           `--simuler`, qui montre ce qui serait fait sans rien faire. */
+        $simuler = in_array('--simuler', $args, true);
+        titre($simuler ? 'Réconciliation (simulation)' : 'Réconciliation');
+
+        if (!Vecteurs::activee()) {
+            ligne(teinte('  vecteurs.activee est à false — rien à faire.', 'muted'));
+            ligne(teinte('  L\'activer dans config/reglages.local.php, après `ollama pull bge-m3`.', 'faint'));
+            exit(0);
+        }
+
+        $t0 = microtime(true);
+        $bilan = Regroupeur::reconcilier($base, time(), $simuler);
+
+        foreach ($bilan['absorbes'] as $f) {
+            printf(
+                "%s %s %s\n",
+                teinte('+', 'success'),
+                teinte(pad(sprintf('cos %.2f  jac %.2f', $f['similarite'], $f['jaccard']), 20), 'accent'),
+                Util::tronquer($f['titre'], 70)
+            );
+        }
+
+        ligne('');
+        ligne(sprintf(
+            '  %d groupe(s) examinés, %d vecteur(s) calculés, %s%d rapprochement(s) — %.1fs',
+            $bilan['groupes'],
+            $bilan['calcules'],
+            $simuler ? 'simulation : ' : '',
+            $bilan['fusions'],
+            microtime(true) - $t0,
+        ));
+        if ($simuler && $bilan['fusions'] > 0) {
+            ligne(teinte('  Relancer sans --simuler pour les appliquer.', 'faint'));
+        }
+        break;
+
     case '--enrichir-ia':
         titre('Second avis');
         if (!narh_reglage('ia_activee', false)) {
@@ -601,6 +651,7 @@ switch ($commande) {
             '--sources'     => 'l\'état du parc, rubrique par rubrique',
             '--etat'        => 'les compteurs',
             '--rescorer'    => 'réévaluer tout le fil après une retouche du lexique ou des seuils',
+            '--fusionner'   => 'réunir les événements que les mots ont laissés séparés (--simuler pour voir sans faire)',
             '--enrichir-ia' => 'demander au modèle son avis sur les scores limites et les pics',
             '--ingerer [n]' => 'lire les n articles les plus récents et en ranger le texte',
             '--purger'      => 'effacer au-delà de la rétention et compacter la base',

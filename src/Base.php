@@ -165,6 +165,13 @@ final class Base
             'statut'     => "TEXT NOT NULL DEFAULT ''",
             'statut_maj' => 'INTEGER',
             'vu_dernier' => 'INTEGER',
+            /* Le vecteur du titre, normalisé (voir Vecteurs). Sur le groupe et
+               pas dans une table à part : il en dépend entièrement, il meurt
+               avec lui, et `purger()` n'a ainsi rien de plus à savoir. */
+            'vecteur'     => 'BLOB',
+            // Le titre au moment du calcul : un groupe dont la tête change a
+            // besoin d'un vecteur neuf, et rien d'autre ne le dirait.
+            'vecteur_de'  => 'TEXT',
         ]);
     }
 
@@ -653,6 +660,94 @@ final class Base
         $st->execute([$depuis, $limite]);
 
         return $st->fetchAll();
+    }
+
+    /* ---- La réconciliation par vecteurs (voir src/Vecteurs.php) -------------
+       Hors cycle : la collecte ne pense pas, et de toute façon le collecteur
+       traite les dépêches une par une alors que l'embedding n'est abordable
+       qu'en lots. */
+
+    /**
+     * Les groupes de la fenêtre, avec leur vecteur s'il est encore valable.
+     *
+     * `vecteur_de` porte le titre au moment du calcul : si la tête du groupe a
+     * changé depuis, on rend le vecteur vide et l'appelant le recalcule. Sans
+     * cette comparaison, un groupe garderait indéfiniment le vecteur de son
+     * premier titre, y compris après avoir changé de sujet.
+     *
+     * @return list<array{id: int, titre: string, jetons: string, premier: int, dernier: int, statut: string, vecteur: string}>
+     */
+    public function groupesAReconcilier(int $depuis, int $limite = 900): array
+    {
+        $st = $this->pdo->prepare(
+            "SELECT id, titre, jetons, premier, dernier, statut,
+                    CASE WHEN vecteur_de = titre THEN vecteur ELSE '' END AS vecteur
+             FROM groupe
+             WHERE dernier >= ? AND titre <> '' AND jetons <> ''
+             ORDER BY dernier DESC LIMIT ?"
+        );
+        $st->execute([$depuis, $limite]);
+
+        /** @var list<array{id: int, titre: string, jetons: string, premier: int, dernier: int, statut: string, vecteur: string}> $r */
+        $r = $st->fetchAll();
+
+        return $r;
+    }
+
+    public function poserVecteur(int $id, string $vecteur, string $titre): void
+    {
+        $st = $this->pdo->prepare('UPDATE groupe SET vecteur = :v, vecteur_de = :t WHERE id = :id');
+        $st->bindValue('v', $vecteur, PDO::PARAM_LOB);
+        $st->bindValue('t', $titre);
+        $st->bindValue('id', $id, PDO::PARAM_INT);
+        $st->execute();
+    }
+
+    /**
+     * Verser un groupe dans un autre, et rendre le compte de reprise mis à jour.
+     *
+     * Le groupe qui **garde** est le plus ancien : c'est lui qui porte le
+     * `premier` du sujet, et c'est le sens de la lecture — un événement a
+     * commencé quelque part. Son titre ne change pas : celui du groupe absorbé
+     * ne serait pas plus juste, seulement plus récent.
+     *
+     * Le statut résiste à la fusion. Si l'un des deux était `suivi` ou
+     * `traite`, le groupe résultant l'est : un desk qui a marqué un sujet ne
+     * doit pas voir sa décision effacée par un rapprochement automatique — et
+     * c'est aussi ce qui le garde hors de `purger()`.
+     *
+     * @return array{sources: int, fils: int, articles: int, score: int, niveau: int}
+     */
+    public function fusionnerGroupes(int $garde, int $absorbe, int $maintenant): array
+    {
+        $this->pdo->beginTransaction();
+        try {
+            $st = $this->pdo->prepare('SELECT statut, statut_maj FROM groupe WHERE id IN (?, ?)');
+            $st->execute([$garde, $absorbe]);
+            $statuts = $st->fetchAll();
+
+            $this->pdo->prepare('UPDATE article SET groupe_id = ? WHERE groupe_id = ?')
+                ->execute([$garde, $absorbe]);
+
+            foreach ($statuts as $s) {
+                if ((string) $s['statut'] !== '') {
+                    $this->pdo->prepare('UPDATE groupe SET statut = ?, statut_maj = ? WHERE id = ?')
+                        ->execute([(string) $s['statut'], $s['statut_maj'], $garde]);
+                    break;
+                }
+            }
+
+            $this->pdo->prepare('DELETE FROM groupe WHERE id = ?')->execute([$absorbe]);
+            $this->pdo->commit();
+        } catch (Throwable $e) {
+            $this->pdo->rollBack();
+
+            throw $e;
+        }
+
+        // Hors transaction : le recalcul relit le groupe, et il doit le relire
+        // dans son état fusionné, pas dans une vue en cours d'écriture.
+        return $this->recalculerGroupe($garde, $maintenant);
     }
 
     /** @param list<string> $jetons */

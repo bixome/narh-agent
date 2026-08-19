@@ -122,6 +122,36 @@ return [
        `ia_lot` borne le passage : juger 7 600 événements d'un coup demanderait
        des heures à un modèle local pour un avis qui, par construction, ne
        décide de rien. */
+    /* ---- La réconciliation par vecteurs ----------------------------------
+       Ce que le Jaccard ne sait pas voir : deux rédactions qui couvrent le même
+       événement sans partager assez de mots. Mesuré sur cette base, avant
+       correction : cinq groupes distincts pour un seul incendie en Lozère,
+       trois pour une même rencontre Trump–Kim. Comme la reprise se compte en
+       maisons et fait le score d'alerte, un événement majeur s'y présentait
+       comme une poignée de faits mineurs.
+
+       Éteint par défaut : il faut avoir tiré le modèle (`ollama pull bge-m3`)
+       et une commande qui appelle un service absent doit le dire, pas échouer.
+
+       `similarite` n'est pas un réglage délicat, contrairement à celui du
+       Jaccard. Mesuré sur 120 paires de la base : les mêmes sujets tombent
+       entre 0,76 et 0,97, les sujets différents entre 0,16 et 0,60. On coupe
+       dans le fossé. Monter au-delà de 0,80 commence à perdre de vraies
+       reprises ; descendre sous 0,65 rapproche des sujets voisins mais
+       distincts — deux matchs de la même équipe, par exemple. */
+    'vecteurs' => [
+        'activee'    => false,
+        'modele'     => 'bge-m3',
+        'similarite' => 0.70,
+        // Titres par appel. Au-delà, la connexion reste ouverte longtemps et
+        // une coupure perdrait tout le passage plutôt qu'un lot.
+        'lot'        => 64,
+        // Le modèle ne pèse que 0,62 Gio, mais il partage la carte avec la
+        // voix du direct (5,76 sur 8) : on le garde le temps du passage, pas
+        // au-delà.
+        'residence'  => 120,
+    ],
+
     'ia_activee' => false,
     'ia_lot'     => 10,
     'ia_timeout' => 20,
