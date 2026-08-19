@@ -121,6 +121,11 @@ hr { border: 0; border-top: 1px solid var(--xo-rule); margin: var(--xo-pad) 0; }
 }
 .xo-panel--active { border-color: var(--xo-accent); }
 .xo-panel--pad    { padding-left: var(--xo-gap); padding-right: var(--xo-gap); }
+/* Un panneau qui doit se voir avant qu'on le cherche — la saisie d'une console,
+   la zone où l'on agit. `--xo-panel` est plus sombre que le fond de page : il
+   creuse là où il faut lever. C'est la même surface que les modales et les
+   menus, pour que « ce qui est actif » ait une seule couleur dans tout XOSHUI. */
+.xo-panel--raise  { background: var(--xo-raise); }
 
 /* Un panneau ne défile JAMAIS lui-même : son titre et son compteur débordent
    de la bordure, et le moindre overflow les couperait en deux. C'est ce corps
@@ -1299,6 +1304,11 @@ hr { border: 0; border-top: 1px solid var(--xo-rule); margin: var(--xo-pad) 0; }
   padding-bottom: calc(var(--xo-cell) / 2);
 }
 .xo-console .xo-panel--pad { padding-left: 1ch; padding-right: 1ch; }
+/* Le mode console retire le fond de tous les panneaux — le filet suffit à les
+   dire. `--raise` est justement celui qui demande le contraire : il faut le
+   redonner ici, sinon le modificateur n'aurait d'effet nulle part en console,
+   qui est le seul endroit où l'on en a besoin. */
+.xo-console .xo-panel--raise { background: var(--xo-raise); }
 
 /* Le titre interrompt le filet : « ──┤ Titre ├── ». Les deux jonctions sont de
    vrais caractères, de la couleur du filet, pas de celle du titre. */

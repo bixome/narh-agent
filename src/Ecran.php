@@ -871,7 +871,13 @@ final class Ecran
      */
     private static function champ(?array $ancre): string
     {
-        return '<label class="xo-prompt">'
+        /* Le champ porte un fond : nu, il se confondait avec le fil des tours,
+           alors qu'il est la seule entrée de l'application. `--raise`, et non le
+           fond de panneau, parce que celui-ci est plus sombre que la page — il
+           creusait là où il fallait lever. C'est la surface des modales et des
+           menus : « ce qui est actif » garde une seule couleur. */
+        return '<div class="xo-panel xo-panel--pad xo-panel--raise">'
+            . '<label class="xo-prompt">'
             . '<span class="xo-prompt__sign">' . Icone::rendre('invite') . '</span>'
             . '<input type="text" id="chat-saisie" aria-label="Demande"'
             . ' data-depeche="' . ($ancre !== null ? (int) $ancre['id'] : '') . '"'
@@ -890,6 +896,7 @@ final class Ecran
             . '</span>'
             . '<span class="xo-spacer"></span>'
             . '<span class="xo-faint">Entrée pour envoyer</span>'
+            . '</div>'
             . '</div>';
     }
 }
