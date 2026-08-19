@@ -145,8 +145,15 @@ conversation. Pas de barre latérale, pas d'onglets, pas de colonnes permanentes
   et le champ, il forme une seule bande avec lui : on regarde ce qu'on a
   désigné, on agit dessus ou on en parle, puis on lit. Les gestes restent
   **avec** l'objet qu'ils visent. La zone **n'existe qu'une fois une ligne
-  choisie**, et ne se referme plus ensuite : permanente elle volerait de la
-  hauteur pour rien, escamotable elle ferait sauter le champ sous le curseur.
+  choisie** : permanente, elle volerait de la hauteur pour rien. Elle ne se
+  referme pas sur une **désélection** — ce serait un saut du champ sous le
+  curseur à chaque parcours de liste — mais sur une **demande explicite**, par
+  la croix de son en-tête. Garder un objet déjà traité à l'écran coûte de la
+  hauteur en permanence ; le saut ne coûte qu'une fois, et il est voulu.
+  Son en-tête tient sur **deux lignes** : le niveau et la rédaction qualifient
+  la même chose et partagent leur ligne, le titre a la sienne. Trois lignes
+  avant le premier mot utile, dans une zone bornée à 16vh, ne laissaient plus
+  de place à ce qu'on était venu lire.
 - **Deux ou trois colonnes dans la conversation.** Une tuile seule prend la
   largeur ; à plusieurs, elles se partagent la rangée. Cela se décide dans
   `Vue::tuiles()` et nulle part ailleurs — une tuile ne connaît que la largeur

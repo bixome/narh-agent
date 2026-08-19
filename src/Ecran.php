@@ -711,7 +711,23 @@ final class Ecran
            et ce qui est gagné revient à la conversation. */
         return '<section class="xo-panel xo-panel--pad" id="inspection"'
             . ' style="flex: none; margin-top: 8px" aria-label="Inspecté" hidden>'
-            . '<div class="xo-rule xo-rule--start">Inspecté</div>'
+            /* Fermable, contrairement à ce que cette classe soutenait jusqu'ici.
+               L'argument était qu'une zone escamotable ferait sauter le champ
+               sous le curseur — c'est vrai, et c'est le prix retenu : à
+               l'usage, garder un objet inspecté à l'écran longtemps après
+               l'avoir traité coûte plus de hauteur, en permanence, que le saut
+               ne coûte une fois.
+
+               Le bouton ne passe pas par `commander()` : la règle 5 vise les
+               **actions** — celles qu'on journalise, qu'on rejoue, qu'un seuil
+               peut déclencher. Refermer un panneau est de l'état d'affichage,
+               comme faire défiler ; en faire une commande nommée mettrait du
+               bruit dans la chronologie unique. */
+            . '<div class="xo-row">'
+            . '<div class="xo-rule xo-rule--start" style="flex: 1">Inspecté</div>'
+            . '<button class="xo-btn xo-btn--ghost" type="button" id="desk-inspecte-fermer"'
+            . ' data-xo-tip="Fermer l\'inspection" aria-label="Fermer l\'inspection">×</button>'
+            . '</div>'
             . '<div class="xo-scroll" id="desk-inspecte" style="max-height: 16vh">'
             . Vue::inspecteur(null) . '</div>'
             /* `xo-row` et non `xo-btn-group` : le groupe est un composant

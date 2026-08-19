@@ -923,18 +923,21 @@ final class Vue
         $ton = self::TONS[$niveau] ?? 'faint';
         $classeBadge = 'xo-badge xo-badge--solid xo-badge--' . ($niveau >= Piece::FORT ? $ton : 'info');
 
-        /* -- Ce que c'est -- */
+        /* -- Ce que c'est, et ce que ça dit : deux lignes, pas trois --
+           La source occupait une ligne à elle seule, en séparateur, entre le
+           badge et le titre. Trois lignes d'en-tête avant le premier mot utile,
+           dans une zone bornée à 16vh : le titre et le résumé se lisaient dans
+           ce qu'il restait. Le nom de la rédaction est une **étiquette**, pas
+           une rupture — il tient à côté du niveau, qu'il qualifie. */
         $html = '<div class="xo-row">'
             . '<span class="' . $classeBadge . '">'
             . (self::GLYPHES[Piece::DEPECHE][$niveau] ?? '·') . ' '
             . e(mb_strtoupper(Alerte::nom($niveau)))
             . '</span>'
+            . '<span class="xo-muted">' . e((string) $a['source_nom']) . '</span>'
             . '<span class="xo-spacer"></span>'
             . '<span class="xo-faint">' . e(Util::age((int) $a['date_tri'])) . '</span>'
-            . '</div>';
-
-        /* -- Ce que ça dit -- */
-        $html .= '<div class="xo-rule xo-rule--start">' . e((string) $a['source_nom']) . '</div>'
+            . '</div>'
             . '<p class="xo-bold">' . e((string) $a['titre']) . '</p>';
 
         if (trim((string) ($a['resume'] ?? '')) !== '') {

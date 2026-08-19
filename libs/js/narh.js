@@ -608,8 +608,11 @@ document.addEventListener('xo:select', (e) => {
        éviter en la sortant du Newsdesk — elle pousserait la conversation vers
        le bas pour montrer une ligne qu'on n'a pas demandée.
 
-       Elle ne se referme plus ensuite : une zone qui disparaît à chaque
-       désélection ferait sauter le champ sous le curseur. */
+       Elle ne se referme pas sur une **désélection** — ce serait un saut du
+       champ sous le curseur à chaque parcours de liste. Elle se referme sur
+       une demande explicite, par la croix de son en-tête : garder un objet
+       traité à l'écran coûte de la hauteur en permanence, le saut ne coûte
+       qu'une fois, et là c'est l'utilisateur qui l'a voulu. */
     const zone = document.getElementById('inspection');
     if (zone) zone.hidden = false;
   }
@@ -1304,6 +1307,25 @@ function majComptes(statuts) {
  * clignoter le détail.
  */
 let inspecteEnCours = null;
+
+/**
+ * Refermer l'inspection.
+ *
+ * `inspecteEnCours` est remis à zéro, sans quoi rechoisir la **même** ligne ne
+ * rouvrirait rien : la garde du début de `montrerInspecte` la prendrait pour
+ * une demande déjà servie, et la zone resterait fermée sur un clic qui vient
+ * pourtant de désigner quelque chose.
+ *
+ * Les gestes partent avec elle sans qu'on ait à les cacher : ils vivent dans
+ * la section. Les masquer en plus ne tenait pas de toute façon — `majGestes()`
+ * réécrit leur état à chaque sélection, et remettait l'attribut à zéro.
+ */
+function fermerInspecte() {
+  document.getElementById('inspection')?.setAttribute('hidden', '');
+  inspecteEnCours = null;
+}
+
+document.getElementById('desk-inspecte-fermer')?.addEventListener('click', fermerInspecte);
 
 async function montrerInspecte(id) {
   if (!id || inspecteEnCours === id) return;
