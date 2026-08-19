@@ -41,6 +41,18 @@ final class Direct
     /** Un sujet déjà passé ne revient pas avant ce délai, et seulement en relance. */
     private const REPRISE_APRES = 600;
 
+    /** Combien de sujets déjà passés la relance examine avant d'abandonner.
+        Borné : chaque candidat coûte une lecture de la veille, et le segment a
+        un budget (BUDGET). En régime sain le premier est le bon et la boucle
+        s'arrête là ; la marge ne sert qu'à traverser les orphelins. */
+    private const RELANCE_CANDIDATS = 25;
+
+    /** Combien de temps le moteur garde le modèle chargé pendant qu'on est en
+        antenne. Large : la borne utile est la fermeture du direct, pas un
+        minuteur — un délai court ferait décharger dans le premier creux, et
+        c'est précisément là que la relance a besoin de sa voix. */
+    private const RESIDENCE = 3600;
+
     /** Une synthèse tous les N segments : plus souvent, elle redirait le flux. */
     private const POINT_TOUS_LES = 7;
 
@@ -150,6 +162,16 @@ final class Direct
         self::poserEtat('voix_jetons', '0');
         // Les formulations récentes, en revanche, ne s'oublient pas : rouvrir
         // l'antenne ne doit pas autoriser à redire ce qu'on vient de dire.
+
+        /* On réveille le modèle maintenant, pendant que le premier segment se
+           compose. Ce segment-là ne dépend pas de lui (il vient de la veille,
+           en 30 à 45 ms) et partira à l'heure quoi qu'il arrive ; c'est sa
+           **voix** qu'on sauve, elle qui n'a que quelques secondes et qui les
+           perdrait entièrement à attendre le chargement. Les segments suivants
+           se relaient d'eux-mêmes : ils tombent toutes les dix-sept secondes,
+           bien avant qu'Ollama ne décharge. */
+        self::residenceModele(self::RESIDENCE);
+
         Journal::noter('ok', 'direct', 'antenne ouverte');
     }
 
@@ -167,6 +189,12 @@ final class Direct
     {
         $bilan = self::bilan();
         self::poserEtat('antenne', '0');
+
+        /* Et on rend la VRAM. Près de six gigaoctets retenus par une antenne
+           fermée, c'est autant de pris sur ce que la machine fait par
+           ailleurs. La conversation, elle, rechargera à la demande : elle
+           n'est pas contrainte par un budget de dix-sept secondes. */
+        self::residenceModele(0);
 
         Journal::noter('ok', 'direct', sprintf(
             'antenne fermée : %d segments, %d sujets, %d jetons, %s',
@@ -483,6 +511,40 @@ final class Direct
         return $out;
     }
 
+    /**
+     * Demander au moteur de tenir le modèle chargé, ou de le rendre.
+     *
+     * Ici et pas dans `voix()` : c'est une propriété de **l'antenne** — elle
+     * s'ouvre, le modèle monte ; elle se ferme, il descend. Le lier au segment
+     * reviendrait à le recharger à chaque tour.
+     */
+    private static function residenceModele(int $secondes): void
+    {
+        $reglages = (array) narh_reglage('ollama', []);
+        (new Ollama((string) ($reglages['url'] ?? 'http://127.0.0.1:11434')))
+            ->residence((string) ($reglages['modele'] ?? ''), $secondes);
+    }
+
+    /**
+     * Oublier des sujets dont on vient de constater qu'ils ont quitté la
+     * collecte. Sans cela, `direct_vu` grossit indéfiniment — 2 340 lignes
+     * pour 329 groupes encore vivants, à la mesure — et ses orphelins passent
+     * devant les sujets réels dans l'ordre de relance.
+     *
+     * @param list<int> $ids
+     */
+    private static function oublier(array $ids): void
+    {
+        if ($ids === []) {
+            return;
+        }
+
+        $trous = implode(',', array_fill(0, count($ids), '?'));
+        self::pdo()->prepare("DELETE FROM direct_vu WHERE groupe_id IN ($trous)")->execute($ids);
+
+        Journal::noter('info', 'direct', count($ids) . ' sujet(s) sortis de la mémoire d’antenne (purgés de la veille)');
+    }
+
     /** @param list<int> $ids */
     private static function marquerVus(array $ids, int $maintenant): void
     {
@@ -631,24 +693,48 @@ final class Direct
      */
     private static function relance(Base $base, int $maintenant): array
     {
+        /* Plusieurs candidats, pas un seul — et c'est ce qui a manqué.
+           `direct_vu` survit à ce qu'il nomme : la rétention efface un groupe
+           d'`actu.sqlite` au bout de quelques jours, sa ligne d'antenne reste.
+           L'ordre étant déterministe, un seul de ces orphelins en tête suffit
+           à faire tomber **toutes** les relances au dernier recours — mesuré
+           ici : le groupe #8026, purgé, reprenait la main à chaque segment et
+           masquait dix-neuf sujets vivants juste derrière. Un direct qui
+           annonce le calme pendant que quatre-vingt-dix dépêches tombent dans
+           l'heure ne ment pas seulement, il cache. */
         $st = self::pdo()->prepare(
-            'SELECT groupe_id FROM direct_vu WHERE quand <= ? ORDER BY fois ASC, quand ASC LIMIT 1'
+            'SELECT groupe_id FROM direct_vu WHERE quand <= ? ORDER BY fois ASC, quand ASC LIMIT '
+            . self::RELANCE_CANDIDATS
         );
         $st->execute([$maintenant - self::REPRISE_APRES]);
-        $id = (int) $st->fetchColumn();
 
-        if ($id > 0) {
+        $morts = [];
+        foreach ($st->fetchAll(PDO::FETCH_COLUMN) as $candidat) {
+            $id = (int) $candidat;
             $groupes = $base->arbre(['groupe' => $id], 1);
-            if ($groupes !== []) {
-                return [
-                    'nature' => 'relance',
-                    'texte'  => (string) $groupes[0]['titre'],
-                    'pieces' => [Piece::evenement($groupes[0])],
-                    'ids'    => [$id],
-                    'lancement' => '',
-                ];
+
+            if ($groupes === []) {
+                // Le groupe a disparu de la collecte : on vient de le prouver,
+                // et c'est le seul moment où on peut le savoir. Oublier ici,
+                // plutôt que sur un critère d'âge : un sujet ancien mais
+                // toujours suivi échappe à la purge de la veille, et l'effacer
+                // sur sa date le ferait repasser pour neuf.
+                $morts[] = $id;
+                continue;
             }
+
+            self::oublier($morts);
+
+            return [
+                'nature' => 'relance',
+                'texte'  => (string) $groupes[0]['titre'],
+                'pieces' => [Piece::evenement($groupes[0])],
+                'ids'    => [$id],
+                'lancement' => '',
+            ];
         }
+
+        self::oublier($morts);
 
         /* Le dernier recours : la collecte elle-même. Il n'y a plus rien à
            dire de l'actualité, mais il y a toujours quelque chose de vrai à
