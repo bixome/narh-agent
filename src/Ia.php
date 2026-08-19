@@ -27,6 +27,7 @@ final class Ia
         private readonly Ollama $moteur,
         private readonly string $modele,
         private readonly int $timeout,
+        private readonly int $contexte = Ollama::CONTEXTE,
     ) {
     }
 
@@ -39,6 +40,7 @@ final class Ia
             new Ollama((string) ($ollama['url'] ?? 'http://127.0.0.1:11434')),
             (string) ($ollama['modele'] ?? 'llama3.2:3b'),
             (int) narh_reglage('ia_timeout', 20),
+            (int) ($ollama['contexte'] ?? Ollama::CONTEXTE),
         );
     }
 
@@ -127,6 +129,7 @@ final class Ia
             $this->timeout,
             $maxJetons,
             $json,
+            $this->contexte,
         );
 
         return $r === null || trim($r['texte']) === '' ? null : trim($r['texte']);

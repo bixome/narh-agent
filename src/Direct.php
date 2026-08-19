@@ -170,7 +170,7 @@ final class Direct
            perdrait entièrement à attendre le chargement. Les segments suivants
            se relaient d'eux-mêmes : ils tombent toutes les dix-sept secondes,
            bien avant qu'Ollama ne décharge. */
-        self::residenceModele(self::RESIDENCE);
+        self::prechauffer();
 
         Journal::noter('ok', 'direct', 'antenne ouverte');
     }
@@ -378,6 +378,8 @@ final class Direct
             (float) $reglages['temperature'],
             self::VOIX_DELAI,
             60,
+            false,
+            (int) ($reglages['contexte'] ?? Ollama::CONTEXTE),
         );
 
         if ($sortie === null) {
@@ -512,6 +514,32 @@ final class Direct
     }
 
     /**
+     * Réveiller le modèle, aussi tard que possible dans la requête.
+     *
+     * Le préchauffage n'est pas un confort : sans lui la voix ne démarre
+     * jamais. Le chargement demande une dizaine de secondes, la voix se coupe
+     * à neuf (`VOIX_DELAI`), et Ollama abandonne un chargement dès que le
+     * client raccroche — chaque segment relançait donc une montée qu'il tuait
+     * lui-même, indéfiniment. Il faut une requête qui va au bout, une fois.
+     *
+     * On la repousse en fin de script pour qu'elle pèse le moins possible sur
+     * l'écran. Sous PHP-FPM la réponse part même avant, et l'attente devient
+     * invisible. Ce n'est pas le cas ici : Laragon sert PHP en `cgi-fcgi`, où
+     * `fastcgi_finish_request()` n'existe pas — vérifié — et l'ouverture
+     * d'antenne coûte donc ces dix secondes, une fois, sur un geste explicite.
+     * Le premier segment, lui, part à l'heure : il vient de la veille.
+     */
+    private static function prechauffer(): void
+    {
+        register_shutdown_function(static function (): void {
+            if (function_exists('fastcgi_finish_request')) {
+                fastcgi_finish_request();
+            }
+            self::residenceModele(self::RESIDENCE);
+        });
+    }
+
+    /**
      * Demander au moteur de tenir le modèle chargé, ou de le rendre.
      *
      * Ici et pas dans `voix()` : c'est une propriété de **l'antenne** — elle
@@ -521,8 +549,11 @@ final class Direct
     private static function residenceModele(int $secondes): void
     {
         $reglages = (array) narh_reglage('ollama', []);
-        (new Ollama((string) ($reglages['url'] ?? 'http://127.0.0.1:11434')))
-            ->residence((string) ($reglages['modele'] ?? ''), $secondes);
+        (new Ollama((string) ($reglages['url'] ?? 'http://127.0.0.1:11434')))->residence(
+            (string) ($reglages['modele'] ?? ''),
+            $secondes,
+            (int) ($reglages['contexte'] ?? Ollama::CONTEXTE),
+        );
     }
 
     /**

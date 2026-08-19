@@ -11,6 +11,15 @@ declare(strict_types=1);
  */
 final class Ollama
 {
+    /* La fenêtre par défaut, en jetons.
+       Elle vit ici et pas seulement dans les réglages parce que **les trois
+       routes doivent demander la même** : Ollama tient une instance chargée
+       par fenêtre, et deux valeurs différentes font recharger le modèle d'un
+       appel à l'autre — seize secondes, à chaque bascule entre la
+       conversation et le direct. `config/reglages.php` reste ce qui décide ;
+       cette constante n'est que le repli commun. */
+    public const CONTEXTE = 8192;
+
     public function __construct(
         private readonly string $url = 'http://127.0.0.1:11434',
     ) {
@@ -90,7 +99,7 @@ final class Ollama
      * raison de retarder l'ouverture d'un direct qui, lui, sait se passer de
      * voix.
      */
-    public function residence(string $modele, int $secondes): void
+    public function residence(string $modele, int $secondes, int $contexte = self::CONTEXTE): void
     {
         $ch = curl_init($this->url . '/api/chat');
         curl_setopt_array($ch, [
@@ -100,14 +109,25 @@ final class Ollama
                 'messages'   => [],
                 'stream'     => false,
                 'keep_alive' => $secondes,
+                // La même fenêtre que partout ailleurs, sinon ce préchauffage
+                // ne sert à rien : Ollama garde une instance par fenêtre, et
+                // charger à 32 768 pour interroger ensuite à 8 192 fait payer
+                // le rechargement qu'on cherchait précisément à éviter.
+                'options'    => ['num_ctx' => $contexte],
             ]),
             CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
             CURLOPT_RETURNTRANSFER => true,
-            // Le chargement continue côté Ollama quand on raccroche : on lance,
-            // on ne surveille pas. Attendre seize secondes ici rendrait à
-            // l'ouverture d'antenne le blanc qu'on cherche justement à retirer.
-            CURLOPT_TIMEOUT        => $secondes === 0 ? 5 : 1,
-            CURLOPT_CONNECTTIMEOUT => 1,
+            /* Il faut attendre la fin du chargement. Première version, on
+               raccrochait au bout d'une seconde en pariant qu'Ollama
+               continuerait de son côté : mesuré, il n'en fait rien — la
+               requête coupée ne charge tout simplement pas, et le
+               préchauffage était un appel pour rien. C'est donc à l'appelant
+               de ne pas faire attendre l'écran (voir `Direct::prechauffer()`),
+               pas à ce client de mentir sur ce qu'il a fait.
+
+               Décharger, en revanche, est immédiat. */
+            CURLOPT_TIMEOUT        => $secondes === 0 ? 5 : 120,
+            CURLOPT_CONNECTTIMEOUT => 2,
         ]);
         curl_exec($ch);
         curl_close($ch);
@@ -135,6 +155,7 @@ final class Ollama
         int $timeout = 8,
         int $maxJetons = 60,
         bool $json = false,
+        int $contexte = self::CONTEXTE,
     ): ?array {
         $charge = [
             'model'    => $modele,
@@ -157,6 +178,8 @@ final class Ollama
                 // Borner la génération autant que le délai : sans ça, le modèle
                 // part sur un paragraphe et le timeout coupe au milieu d'un mot.
                 'num_predict' => $maxJetons,
+                // Identique à `repondre()` et `residence()` : voir CONTEXTE.
+                'num_ctx'     => $contexte,
             ],
         ];
 
@@ -210,7 +233,7 @@ final class Ollama
         callable $surJeton,
         float $temperature = 0.7,
         array $outils = [],
-        int $contexte = 8192,
+        int $contexte = self::CONTEXTE,
         ?callable $surReflexion = null,
     ): array {
         $contenu = '';
