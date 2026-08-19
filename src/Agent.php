@@ -25,6 +25,7 @@ final class Agent
         return [
             'modele'         => (string) narh_reglage('ollama')['modele'],
             'temperature'    => (float) narh_reglage('ollama')['temperature'],
+            'contexte'       => (int) (narh_reglage('ollama')['contexte'] ?? 8192),
             'prompt_systeme' => 'Tu es NARH, un agent local exécuté via Ollama, intégré à une console de veille. '
                 . "Réponds de façon concise et directe, en français, format texte brut sans markdown lourd. "
                 . "Utilise rechercher_actualites pour toute question sur l'actualité récente plutôt que de "
@@ -279,6 +280,11 @@ final class Agent
                 },
                 (float) $reglages['temperature'],
                 $outils,
+                (int) $reglages['contexte'],
+                // Le modèle réfléchit avant d'écrire : c'est encore de
+                // l'analyse, et c'est la seule chose qu'on puisse dire pendant
+                // ces secondes-là. Le contenu de sa réflexion ne sort pas.
+                static fn (): mixed => $emettre('phase', ['phase' => 'analyse']),
             );
             $stats['eval_count'] += $resultat['eval_count'];
             $stats['eval_duration'] += $resultat['eval_duration'];

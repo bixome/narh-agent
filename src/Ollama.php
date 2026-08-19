@@ -72,6 +72,48 @@ final class Ollama
     }
 
     /**
+     * Charger le modèle en mémoire, ou l'en sortir — sans rien générer.
+     *
+     * Le direct plafonne sa voix à quelques secondes (`Direct::VOIX_DELAI`),
+     * or **charger** un modèle de 8 milliards de paramètres en demande seize
+     * (mesuré ici, RTX 3060 Ti). Le premier segment après un déchargement
+     * était donc muet à coup sûr : le délai partait entièrement dans la montée
+     * en VRAM, sans qu'un jeton soit produit. On paie ce prix **hors
+     * chronomètre**, à l'ouverture de l'antenne.
+     *
+     * `$residence` est le temps pendant lequel Ollama garde le modèle chargé
+     * après une requête. À 0, il le décharge immédiatement : c'est ce qu'on
+     * veut en fermant l'antenne, sous peine de retenir près de 6 Gio de VRAM
+     * sur une machine qui sert aussi à autre chose.
+     *
+     * Ne lève jamais, et n'attend pas la fin : un moteur absent n'est pas une
+     * raison de retarder l'ouverture d'un direct qui, lui, sait se passer de
+     * voix.
+     */
+    public function residence(string $modele, int $secondes): void
+    {
+        $ch = curl_init($this->url . '/api/chat');
+        curl_setopt_array($ch, [
+            CURLOPT_POST       => true,
+            CURLOPT_POSTFIELDS => json_encode([
+                'model'      => $modele,
+                'messages'   => [],
+                'stream'     => false,
+                'keep_alive' => $secondes,
+            ]),
+            CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
+            CURLOPT_RETURNTRANSFER => true,
+            // Le chargement continue côté Ollama quand on raccroche : on lance,
+            // on ne surveille pas. Attendre seize secondes ici rendrait à
+            // l'ouverture d'antenne le blanc qu'on cherche justement à retirer.
+            CURLOPT_TIMEOUT        => $secondes === 0 ? 5 : 1,
+            CURLOPT_CONNECTTIMEOUT => 1,
+        ]);
+        curl_exec($ch);
+        curl_close($ch);
+    }
+
+    /**
      * Une phrase, tout de suite ou pas du tout.
      *
      * Rien à voir avec `repondre()` : pas de flux, pas d'outils, pas de boucle,
@@ -98,6 +140,18 @@ final class Ollama
             'model'    => $modele,
             'messages' => $messages,
             'stream'   => false,
+            /* Couper la réflexion des modèles qui en ont une (Qwen3 et
+               suivants). Elle est ici doublement fatale : elle consomme
+               `num_predict` avant d'écrire un mot — soixante jetons de
+               raisonnement, zéro de réponse — et elle dépense le délai qu'on
+               vient justement de plafonner. La méthode promet « une phrase,
+               tout de suite ou pas du tout » : penser d'abord la contredit.
+
+               Ici et pas chez l'appelant : `Direct` et `Ia` veulent tous deux
+               ce comportement, et c'est la nature de `phrase()` qui l'impose,
+               pas leur usage. Ignoré sans dommage par les modèles sans
+               réflexion. */
+            'think'    => false,
             'options'  => [
                 'temperature' => $temperature,
                 // Borner la génération autant que le délai : sans ça, le modèle
@@ -147,6 +201,7 @@ final class Ollama
      * @param list<array{role: string, content: string}> $messages
      * @param list<array<string, mixed>>                 $outils
      * @param callable(string $jeton): void               $surJeton
+     * @param callable(): void|null                       $surReflexion
      * @return array{content: string, tool_calls: array, prompt_eval_count: int, eval_count: int, eval_duration: int}
      */
     public function repondre(
@@ -155,16 +210,27 @@ final class Ollama
         callable $surJeton,
         float $temperature = 0.7,
         array $outils = [],
+        int $contexte = 8192,
+        ?callable $surReflexion = null,
     ): array {
         $contenu = '';
         $appelsOutils = [];
+        $reflechi = false;
         $stats = ['prompt_eval_count' => 0, 'eval_count' => 0, 'eval_duration' => 0];
 
         $charge = [
             'model'    => $modele,
             'messages' => $messages,
             'stream'   => true,
-            'options'  => ['temperature' => $temperature],
+            'options'  => [
+                'temperature' => $temperature,
+                /* La fenêtre se déclare, elle ne se subit pas : c'est elle qui
+                   décide si le modèle tient en VRAM ou déborde en RAM, et le
+                   défaut d'Ollama change d'une version à l'autre. Non déclarée,
+                   la même machine et le même modèle ne donnaient pas le même
+                   débit après une mise à jour du moteur. */
+                'num_ctx'     => $contexte,
+            ],
         ];
         if ($outils !== []) {
             $charge['tools'] = $outils;
@@ -181,7 +247,7 @@ final class Ollama
             CURLOPT_POSTFIELDS     => json_encode($charge, JSON_INVALID_UTF8_SUBSTITUTE),
             CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
             CURLOPT_TIMEOUT        => 300,
-            CURLOPT_WRITEFUNCTION  => function ($curl, string $bloc) use (&$contenu, &$appelsOutils, &$stats, $surJeton): int {
+            CURLOPT_WRITEFUNCTION  => function ($curl, string $bloc) use (&$contenu, &$appelsOutils, &$reflechi, &$stats, $surJeton, $surReflexion): int {
                 foreach (explode("\n", $bloc) as $ligne) {
                     $ligne = trim($ligne);
                     if ($ligne === '') {
@@ -191,6 +257,23 @@ final class Ollama
                     if (!is_array($obj)) {
                         continue;
                     }
+
+                    /* Un modèle à réflexion streame d'abord dans `thinking`,
+                       et `content` reste vide plusieurs secondes. Sans ce
+                       signal, aucune phase ne part et l'écran passe pour figé
+                       — le cas même que la phase « analyse » devait couvrir.
+
+                       On ne transmet pas le texte, seulement le fait qu'il
+                       coule : afficher un modèle qui commente son propre
+                       raisonnement, c'est la méta-cognition qu'on a écartée
+                       (CLAUDE.md, § Ce qu'on ne recopie pas). */
+                    if (!$reflechi && ($obj['message']['thinking'] ?? '') !== '') {
+                        $reflechi = true;
+                        if ($surReflexion !== null) {
+                            $surReflexion();
+                        }
+                    }
+
                     $jeton = (string) ($obj['message']['content'] ?? '');
                     if ($jeton !== '') {
                         $contenu .= $jeton;
