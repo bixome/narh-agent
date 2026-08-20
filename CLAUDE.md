@@ -446,6 +446,20 @@ Ils ont été payés dans les deux projets d'origine. Ils se transfèrent avec l
   changer mais écrivait quand même sa ligne : deux traces pour un seul effet, dans
   le seul endroit qui doit rester lisible quand on cherche ce qui s'est passé la
   nuit. Un marquage sans effet n'est donc ni joué, ni journalisé, ni retenu.
+- **`session_start()` en tête d'une route sérialise tout l'écran.** PHP tient le
+  fichier de session verrouillé jusqu'à la fin du script : deux requêtes du même
+  navigateur ne s'exécutent jamais en parallèle. Mesuré à quatre appels
+  simultanés sur `api/fils.php` — sans cookie 0,166 / 0,173 / 0,198 / 0,177 s,
+  avec le même cookie 0,132 / 0,240 / 0,332 / 0,425 s, l'escalier d'une exécution
+  en série. Le symptôme trompe : les médianes restent saines et seules les queues
+  explosent (`api.php?action=etat` à 3,4 s, `api/fils.php` à 18,5 s), ce qui se
+  lit comme une lenteur alors que c'est une file. `api/chat.php` était le pire —
+  il tenait le verrou le temps d'une réponse entière, et taper une question
+  revenait à se mettre derrière la voix du direct. **N'ouvrir la session que là
+  où l'on écrit** — `Agent::filId()` s'en charge — et appeler
+  `Agent::filRendreLaMain()` avant tout ce qui dure : un stream, un appel au
+  modèle, un rendu. `Agent` se souvient du fil pour que la lecture qui suit ne
+  reprenne pas le verrou.
 
 ## Ce qu'on ne recopie pas
 
