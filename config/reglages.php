@@ -102,12 +102,14 @@ return [
 
     'ollama' => [
         'url'         => 'http://127.0.0.1:11434',
-        'modele'      => 'qwen3:8b',
+        'modele'      => 'llama3.2:3b',
         'temperature' => 0.7,
         /* La fenêtre, en jetons — c'est un réglage de **machine**, pas de
            modèle : elle décide si le poids du modèle plus le cache tiennent
-           dans la VRAM. Mesuré sur une RTX 3060 Ti (8 Gio) : qwen3:8b en Q4
-           occupe ~5,2 Gio, et 8192 jetons de cache en ajoutent ~1. Au-delà,
+           dans la VRAM. La déclarer plutôt que la subir est ce qui compte.
+           Mesuré sur une RTX 3060 Ti (8 Gio) : sans cette ligne, Ollama
+           choisit 32 768 et llama3.2:3b — un modèle de 2 Go — occupe 5,47
+           Gio, presque toute la carte. Au-delà de ce que la VRAM tient,
            Ollama déborde en RAM et le débit est divisé par dix — sans rien
            dire, la réponse arrive juste dix fois plus tard. */
         'contexte'    => 8192,
