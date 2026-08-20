@@ -736,10 +736,15 @@ final class Ecran
                plus alourdit une bordure au lieu de nommer une section. Les
                icônes restent sur les boutons, où elles désignent une action. */
             . '<h2 class="xo-panel__title">Utilisateur</h2>'
+            /* `Corpus::etat()` compte quatre tables, dont une FTS5 : mesuré à
+               4,2 ms une fois la base ouverte — elle l'est déjà quand la tuile
+               se rend. Les 111 ms d'un premier appel à froid sont l'ouverture,
+               que la page paie de toute façon. */
             . Vue::utilisateur(
                 (string) narh_reglage('utilisateur', 'vous'),
                 Memoire::bilan(),
                 Direct::enAntenne(),
+                Corpus::etat(),
             )
             /* Ne reste ici que ce qui vise **la personne**.
 

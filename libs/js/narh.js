@@ -725,6 +725,7 @@ async function appelerFils(action = 'etat', id = 0) {
 
     // La jauge est rendue par le serveur : lui seul connaît les deux bouts —
     // les jetons relus en base, la fenêtre du modèle chez Ollama.
+    remplir('compteurs', data.compteurs);
     remplir('jauge-contexte', data.contexte);
 
     /* Plus de `remplir('desk-outils')` : le poste de commande était un panneau

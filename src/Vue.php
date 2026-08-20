@@ -83,7 +83,20 @@ final class Vue
      */
     public static function compte(int $n, string $nom, ?string $pluriel = null): string
     {
-        return $n . ' ' . ($n > 1 ? ($pluriel ?? $nom . 's') : $nom);
+        return self::nombre($n) . ' ' . ($n > 1 ? ($pluriel ?? $nom . 's') : $nom);
+    }
+
+    /**
+     * Un entier lisible : 4353 → « 4 353 ».
+     *
+     * L'espace est **insécable** : en fin de ligne, une espace ordinaire
+     * couperait le nombre en deux et « 4 » se lirait seul au bout d'une
+     * colonne. Contrairement à `milliers()`, rien n'est arrondi — un moniteur
+     * qu'on lit pour savoir où l'on en est ne doit pas approximer.
+     */
+    public static function nombre(int $n): string
+    {
+        return number_format($n, 0, ',', "\u{00A0}");
     }
 
     public static function ligne(Piece $p, ?int $rang = null): string
@@ -1196,15 +1209,91 @@ final class Vue
      *
      * @param array{fils: int, tours: int, jetons: int} $stats
      */
-    public static function utilisateur(string $nom, array $stats, bool $antenne = false): string
+    /**
+     * Le moniteur du compte : ce que l'agent retient, et ce qu'il en relit.
+     *
+     * Une ligne de compteurs pâles tenait cette place. Elle disait le juste —
+     * fils, tours, jetons — mais sur un seul rang et sans hiérarchie, si bien
+     * qu'on la survolait sans la lire. La tuile ne racontant plus que ça
+     * depuis que « Fil neuf » et « Mémoire » l'ont quittée, elle avait de la
+     * place à rendre utile.
+     *
+     * Ce sont des **paires** (`xo-kv`), la grammaire déjà employée par
+     * l'inspecteur pour « Publié · Relevé · Domaine » : mêmes points de
+     * conduite, même alignement. Deux fiches de valeurs dans le même écran ne
+     * doivent pas s'écrire de deux façons.
+     *
+     * Ce qui n'y figure pas est aussi décidé : le modèle, l'état du moteur et
+     * la santé des sources vivent dans la barre d'état, à trente centimètres.
+     * Les répéter, c'est demander lequel croire. Le corpus, lui, n'était nulle
+     * part — la mémoire longue existait sans se voir.
+     *
+     * @param array{fils: int, tours: int, jetons: int}         $stats
+     * @param array{articles?: int, passages?: int, echecs?: int} $corpus
+     */
+    /**
+     * Les paires du moniteur, seules — le sondage les repose sans refaire
+     * l'avatar ni l'étiquette de régime, qui eux ne changent pas.
+     *
+     * @param array{fils: int, tours: int, jetons: int}           $stats
+     * @param array{articles?: int, passages?: int, echecs?: int} $corpus
+     */
+    public static function compteurs(array $stats, array $corpus = []): string
     {
+        $faits = [
+            'Mémoire' => self::compte((int) $stats['fils'], 'fil')
+                . ' · ' . self::compte((int) $stats['tours'], 'tour'),
+            'Jetons'  => self::nombre((int) $stats['jetons']) . ' relus depuis le début',
+        ];
+
+        /* Le corpus n'est montré que s'il existe : sur une installation neuve,
+           « 0 article · 0 passage » occupe une ligne pour dire qu'il ne s'est
+           rien passé. La ligne apparaît au premier `--ingerer`. */
+        if ((int) ($corpus['articles'] ?? 0) > 0) {
+            $dit = self::compte((int) $corpus['articles'], 'article')
+                . ' · ' . self::compte((int) ($corpus['passages'] ?? 0), 'passage');
+
+            // Les illisibles disent le taux de réussite du lecteur, et ils ne
+            // se voient nulle part ailleurs. Tus quand il n'y en a pas.
+            if ((int) ($corpus['echecs'] ?? 0) > 0) {
+                $dit .= ' · ' . self::nombre((int) $corpus['echecs']) . ' illisibles';
+            }
+            $faits['Corpus'] = $dit;
+        }
+
+        $html = '<dl class="xo-kv">';
+        foreach ($faits as $cle => $valeur) {
+            $html .= '<div class="xo-kv__row">'
+                . '<dt>' . e($cle) . '</dt>'
+                . '<span class="xo-kv__leader" aria-hidden="true"></span>'
+                . '<dd>' . e($valeur) . '</dd>'
+                . '</div>';
+        }
+
+        return $html . '</dl>';
+    }
+
+    public static function utilisateur(
+        string $nom,
+        array $stats,
+        bool $antenne = false,
+        array $corpus = [],
+    ): string {
         return '<div class="xo-row" style="align-items: flex-start">'
             . self::avatar($nom)
             . '<div class="xo-stack xo-stack--tight" style="flex: 1">'
             . '<div class="xo-row"><span class="xo-bold">' . e($nom) . '</span>'
             . '<span class="xo-spacer"></span>' . self::regime($antenne) . '</div>'
-            . '<div class="xo-faint">' . (int) $stats['fils'] . ' fils · '
-            . (int) $stats['tours'] . ' tours · ' . (int) $stats['jetons'] . ' jetons</div>'
+            /* Un identifiant parce qu'un moniteur se dément s'il ne bouge pas :
+               une réponse ajoute un tour et des jetons, et ces deux nombres
+               restaient ceux du chargement jusqu'au prochain F5. Le sondage
+               repose le bloc **rendu par PHP** (règle 2) ; le navigateur ne
+               recompose rien, il remplace. */
+            . '<div id="compteurs">' . self::compteurs($stats, $corpus) . '</div>'
+            /* La jauge reste hors des paires : c'est la seule valeur qui
+               **bouge** d'un tour à l'autre, et le navigateur la remplace
+               seul (`jauge-contexte`). Une mesure vivante au milieu de
+               compteurs stables se lit mieux détachée. */
             . '<div id="jauge-contexte">' . self::contexte(0, 0) . '</div>'
             . '</div>'
             . '</div>';
@@ -1271,7 +1360,7 @@ final class Vue
                fenêtre est inconnue. On le dit — une jauge à zéro laisserait
                croire qu'elle est vide, ce qui n'est pas la même chose. */
             return '<div class="xo-progress">'
-                . '<span class="xo-progress__label">contexte</span>'
+                . '<span class="xo-progress__label">Contexte</span>'
                 . '<span class="xo-faint">—</span>'
                 . '</div>';
         }
@@ -1289,7 +1378,7 @@ final class Vue
         $dit = self::milliers($utilise) . ' / ' . self::milliers($fenetre);
 
         return '<div class="' . $classe . '">'
-            . '<span class="xo-progress__label">contexte</span>'
+            . '<span class="xo-progress__label">Contexte</span>'
             . '<div class="xo-progress__track" role="meter"'
             . ' aria-valuenow="' . $pct . '" aria-valuemin="0" aria-valuemax="100"'
             . ' aria-label="Fenêtre de contexte : ' . e($dit) . ' jetons">'

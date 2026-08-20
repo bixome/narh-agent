@@ -117,6 +117,10 @@ try {
         'ecartes'  => Vue::lignesEvenements($base->arbre(['statut' => 'ecarte'], 12)),
         'statuts'  => $base->comptesStatuts(),
         'tours'    => Vue::tours($courant > 0 ? Memoire::messages($courant) : []),
+        /* Le moniteur du compte : un tour de plus, des jetons de plus. Rendus
+           ici comme tout le reste — le navigateur remplace un bloc déjà écrit,
+           il n'en compose pas (règle 2). */
+        'compteurs' => Vue::compteurs(Memoire::bilan(), Corpus::etat()),
         'contexte' => Vue::contexte(
             $courant > 0 ? Memoire::contexteDernier($courant) : 0,
             (int) ($charge['contexte'] ?? 0),
