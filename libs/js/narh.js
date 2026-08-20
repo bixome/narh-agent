@@ -287,6 +287,13 @@ async function commander(action, item = null, porte = 'inconnue', argument = '')
       await poserTuile(action);
       return;
 
+    /* L'aide n'est pas une tuile : elle ne parle ni du fil ni de la veille, et
+       n'a rien à laisser dans la chronologie. Une modale qu'on ferme d'Échap,
+       comme XOSHUI la sert déjà à `?`. */
+    case 'aide':
+      document.getElementById('aide')?.showModal();
+      return;
+
     /* Le corpus se comporte pareil depuis les quatre portes.
        Il a d'abord refusé de s'ouvrir sans requête, ce qui en faisait une
        commande à deux vitesses : utilisable depuis le champ, inerte depuis la

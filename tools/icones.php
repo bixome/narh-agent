@@ -67,6 +67,7 @@ const ICONES = [
     'outils'      => 'wrench',
     'reglages'    => 'cog',
     'chercher'    => 'magnifier',
+    'aide'        => 'info',
     'invite'      => 'code',
 ];
 

@@ -75,6 +75,16 @@ final class Ecran
         'memoire'      => ['Voir les fils passés',       '',                  '', 'Tuiles', 'memoire', '', ''],
         'corpus'       => ['Chercher dans le corpus',    '',                  '', 'Tuiles', 'chercher', '', ''],
         'outils'       => ['Voir les outils du fil',     '',                  '', 'Tuiles', 'outils', '', ''],
+        /* L'aide n'était atteignable que par `?`, et `?` ne part jamais depuis
+           le champ — qui a le focus au chargement, où l'on tape, et qui écrit
+           donc « ? » au lieu d'ouvrir quoi que ce soit. Le pied promettait un
+           geste que l'état par défaut de l'écran rendait impossible.
+
+           Ni raccourci maison ni bouton de plus : une **commande**, comme
+           tout le reste (règle 6). Elle passe par `commander()`, donc par le
+           champ, la palette et le clic droit à la fois — et `?` continue de
+           marcher partout ailleurs, puisqu'il vient de XOSHUI. */
+        'aide'         => ["Ouvrir l'aide",              '',                  '', 'Écran', 'aide', '', ''],
         'inspecter'    => ['Inspecter la ligne',         'depeche evenement', '', 'Tuiles', 'inspecter', 'inspecter', ''],
         'suivi'        => ["Suivre l'événement",         'depeche evenement', '', 'Veille', 'suivre', 'suivre', 'marque le groupe suivi'],
         'traite'       => ['Marquer traité',             'depeche evenement', '', 'Veille', 'traite', 'traité', 'marque le groupe traité'],
@@ -525,7 +535,9 @@ final class Ecran
   <div class="xo-keys">
     <span><kbd>Ctrl+K</kbd> commandes</span>
     <span><kbd>/</kbd> une commande dans le champ</span>
-    <span><kbd>?</kbd> aide</span>
+    <!-- Les deux portes, et dans cet ordre : `?` ne part pas depuis le champ,
+         qui a le focus au chargement. Celle qui marche toujours d'abord. -->
+    <span><kbd>/aide</kbd> ou <kbd>?</kbd> hors du champ</span>
     <span class="xo-spacer"></span>
     <span class="xo-faint" id="etat-pied"><?= (int) $stats['articles'] ?> dépêches · <?= (int) $stats['groupes'] ?> événements</span>
     <span class="xo-faint">NARH <?= e(NARH_VERSION) ?></span>
