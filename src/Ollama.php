@@ -67,6 +67,54 @@ final class Ollama
         return ['version' => (string) ($version['version'] ?? '?'), 'charges' => $charges];
     }
 
+    /**
+     * Ce qui est installé sur disque, et qui sait tenir une conversation.
+     *
+     * `etat()` dit ce qui est chargé maintenant ; celui-ci dit ce qu'on peut
+     * choisir. Les deux listes ne se recouvrent pas, et c'est normal : un
+     * modèle installé mais déchargé reste un choix valide — il paiera son
+     * chargement au premier appel, pas au moment du choix.
+     *
+     * Les modèles d'embedding sont écartés. `bge-m3` est installé ici pour la
+     * réconciliation par vecteurs et apparaîtrait dans la même liste, alors
+     * qu'il ne répond pas sur `/api/chat` : le désigner comme voix rendrait
+     * l'agent muet sans rien dire — le pire des symptômes, puisque le direct
+     * sait se passer de voix et ne s'en plaindrait pas.
+     *
+     * Le filtre écarte ce qu'Ollama déclare embedding, et jamais ce qu'il ne
+     * déclare pas : `capabilities` est récent, et exiger `completion` viderait
+     * la liste entière sur un Ollama plus ancien. Un sélecteur vide est une
+     * panne ; un sélecteur trop large n'est qu'un mauvais choix possible.
+     *
+     * @return list<array{nom: string, taille: int, parametres: string, quantification: string, reflexion: bool}>
+     */
+    public function catalogue(): array
+    {
+        $modeles = [];
+
+        foreach ($this->lire('/api/tags', 3)['models'] ?? [] as $m) {
+            $capacites = is_array($m['capabilities'] ?? null) ? $m['capabilities'] : [];
+            if (in_array('embedding', $capacites, true)) {
+                continue;
+            }
+
+            $modeles[] = [
+                'nom'            => (string) ($m['name'] ?? ''),
+                'taille'         => (int) ($m['size'] ?? 0),
+                'parametres'     => (string) ($m['details']['parameter_size'] ?? '?'),
+                'quantification' => (string) ($m['details']['quantization_level'] ?? '?'),
+                'reflexion'      => in_array('thinking', $capacites, true),
+            ];
+        }
+
+        // Par nom : Ollama les rend par date de modification, et la liste
+        // changerait de place à chaque `pull` sur une machine qu'on n'a pas
+        // touchée. Un sélecteur se parcourt de mémoire.
+        usort($modeles, static fn (array $a, array $b): int => strcmp($a['nom'], $b['nom']));
+
+        return $modeles;
+    }
+
     /** @return array<string, mixed> */
     private function lire(string $chemin, int $timeout): array
     {

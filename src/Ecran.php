@@ -570,10 +570,51 @@ final class Ecran
       <span class="xo-hint">Il donne aussi son motif à l'avatar.</span>
     </label>
 
+    <?php
+      /* Le catalogue est lu ici, au rendu de la page, et non à l'ouverture du
+         dialogue : `api/fils.php` interroge déjà le moteur à chaque sondage,
+         un appel de plus au chargement ne change pas la nature de la page. Le
+         peupler depuis le navigateur aurait demandé au JS de dessiner des
+         <option> — ce que la règle 2 lui interdit.
+
+         Un champ libre laissait entrer une faute de frappe qui ne se voyait
+         qu'au tour suivant, en « model not found » au milieu d'une réponse. */
+      $catalogue = (new Ollama((string) narh_reglage('ollama')['url']))->catalogue();
+      $courant   = (string) $r['modele'];
+      $connu     = false;
+      foreach ($catalogue as $m) {
+          $connu = $connu || $m['nom'] === $courant;
+      }
+    ?>
     <label class="xo-field">
       <span class="xo-label">Modèle</span>
-      <input class="xo-input" type="text" id="r-modele" value="<?= e((string) $r['modele']) ?>">
-      <span class="xo-hint">Tel qu'Ollama le nomme, par exemple <code>llama3.2:3b</code>.</span>
+      <select class="xo-select" id="r-modele">
+        <?php if (!$connu): ?>
+          <!-- Le choix enregistré reste présent et sélectionné même quand le
+               moteur ne le propose pas — injoignable, ou modèle désinstallé.
+               Sans cette option, ouvrir les réglages pour corriger une
+               température aurait changé la voix au passage, sans le dire. -->
+          <option value="<?= e($courant) ?>" selected>
+            <?= e($courant) ?><?= $catalogue === [] ? '' : ' · absent du moteur' ?>
+          </option>
+        <?php endif; ?>
+        <?php foreach ($catalogue as $m): ?>
+          <?php
+            $etiquette = $m['nom'] . ' · ' . $m['parametres'] . ' · ' . $m['quantification']
+                . ' · ' . number_format($m['taille'] / 1073741824, 1, ',', ' ') . ' Gio'
+                . ($m['reflexion'] ? ' · réflexion' : '');
+          ?>
+          <option value="<?= e($m['nom']) ?>"<?= $m['nom'] === $courant ? ' selected' : '' ?>><?= e($etiquette) ?></option>
+        <?php endforeach; ?>
+      </select>
+      <span class="xo-hint">
+        <?php if ($catalogue === []): ?>
+          Moteur injoignable : seul le choix enregistré est proposé.
+        <?php else: ?>
+          Ce qu'Ollama a installé. La taille est celle du poids seul — la fenêtre
+          de contexte s'ajoute par-dessus dans la VRAM.
+        <?php endif; ?>
+      </span>
     </label>
 
     <label class="xo-field">

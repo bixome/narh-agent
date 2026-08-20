@@ -31,6 +31,13 @@ try {
 
     $reglages = Agent::reglages();
 
+    /* Le nom n'est pas vérifié contre le catalogue d'Ollama, et ce n'est pas
+       un oubli : le moteur peut être éteint au moment où l'on règle l'écran,
+       et refuser alors un modèle parfaitement installé serait pire que
+       d'accepter un nom inconnu. La route ne sait pas distinguer « ce modèle
+       n'existe pas » de « je n'ai pas pu demander ». Le sélecteur des réglages
+       écarte la faute de frappe là où elle se commet ; ici on ne fait que
+       borner la longueur. */
     $modele = trim((string) ($_POST['modele'] ?? ''));
     if ($modele !== '') {
         $reglages['modele'] = mb_substr($modele, 0, 80);
