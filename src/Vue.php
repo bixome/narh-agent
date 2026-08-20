@@ -72,6 +72,20 @@ final class Vue
      * après l'autre, comme une sortie de terminal. Au-delà de douze, l'attente
      * deviendrait de la lenteur — l'index est plafonné.
      */
+    /**
+     * Un compte et son nom, accordés.
+     *
+     * Les pieds de tuile concaténaient un nombre et un mot déjà au pluriel :
+     * « 1 dépêches », « 1 fils », « 1 appels ». Un seul endroit décide donc de
+     * l'accord — l'ajouter à chaque pied l'aurait fait oublier au suivant.
+     *
+     * Le français met zéro au singulier : « 0 appel », comme « 0 dépêche ».
+     */
+    public static function compte(int $n, string $nom, ?string $pluriel = null): string
+    {
+        return $n . ' ' . ($n > 1 ? ($pluriel ?? $nom . 's') : $nom);
+    }
+
     public static function ligne(Piece $p, ?int $rang = null): string
     {
         $ton = self::TONS[$p->poids] ?? 'faint';
@@ -544,6 +558,11 @@ final class Vue
 
             Tuile::MEMOIRE => self::fils($contenu['fils'] ?? [], Agent::filId()),
 
+            /* Le poste de commande tel qu'il était au pied du Newsdesk : ce
+               qui a déjà tourné, puis de quoi en lancer un. Les deux rendus
+               existaient déjà et n'ont pas bougé — seule leur adresse change. */
+            Tuile::OUTILS => self::outils($contenu['appels'] ?? []) . self::formulaireOutil(),
+
             Tuile::LECTURE => self::lecture($contenu),
 
             Tuile::CORPUS => self::corpus($contenu['passages'] ?? [], (string) ($contenu['q'] ?? '')),
@@ -555,19 +574,31 @@ final class Vue
 
         $compte = match ($tuile->type) {
             Tuile::VEILLE  => isset($contenu['depeches'])
-                ? count($contenu['depeches']) . ' dépêches'
-                : count($contenu['evenements'] ?? []) . ' événements',
+                ? self::compte(count($contenu['depeches']), 'dépêche')
+                : self::compte(count($contenu['evenements'] ?? []), 'événement'),
             Tuile::ALERTES => count($contenu['groupes'] ?? []) . ' sur 6 h',
-            Tuile::MEMOIRE => count($contenu['fils'] ?? []) . ' fils',
-            Tuile::LECTURE => count($contenu['paragraphes'] ?? []) . ' paragraphes',
-            Tuile::CORPUS  => count($contenu['passages'] ?? []) . ' passages',
+            /* « 30 sur 46 » et non « 30 » : le compte disait la page, ce qui le
+               mettait en contradiction avec la tuile Utilisateur juste au
+               dessus. Un compte qui ne dit pas qu'il tronque se lit comme un
+               total, et l'on croit avoir tout vu. */
+            Tuile::MEMOIRE => (static function () use ($contenu): string {
+                $montres = count($contenu['fils'] ?? []);
+                $total = (int) ($contenu['total'] ?? $montres);
+
+                return $total > $montres
+                    ? $montres . ' sur ' . self::compte($total, 'fil')
+                    : self::compte($montres, 'fil');
+            })(),
+            Tuile::OUTILS  => self::compte(count($contenu['appels'] ?? []), 'appel'),
+            Tuile::LECTURE => self::compte(count($contenu['paragraphes'] ?? []), 'paragraphe'),
+            Tuile::CORPUS  => self::compte(count($contenu['passages'] ?? []), 'passage'),
             // Les armées, pas les déclarées : le compte doit dire ce qui peut
             // partir. Trois conduites dont deux éteintes annoncerait « 3 » pour
             // une seule qui tire.
-            Tuile::CONDUITES => count(array_filter(
+            Tuile::CONDUITES => self::compte(count(array_filter(
                 $contenu['declarees'] ?? [],
                 static fn (array $c): bool => (bool) ($c['actif'] ?? true),
-            )) . ' armées',
+            )), 'armée'),
             default        => '',
         };
 
@@ -979,20 +1010,30 @@ final class Vue
             ];
         }
 
+        /* Des attributs, plus d'identifiants.
+
+           Le formulaire vivait à un seul endroit, fixe : un `id` suffisait.
+           Depuis qu'il voyage dans une tuile, on peut en poser deux dans le
+           même fil — et deux `id="outil-nom"` dans une page, c'est le premier
+           qui répond à tout le monde. On lancerait l'outil choisi dans la
+           tuile d'en haut en cliquant sur le bouton de celle d'en bas.
+
+           Chaque champ se retrouve donc **dans son propre formulaire**, par
+           `closest('[data-outil-formulaire]')`. */
         return '<div class="xo-rule xo-rule--start">Lancer un outil</div>'
             . '<div class="xo-row" data-outil-formulaire'
             . " data-schema='" . e(json_encode($schema, JSON_UNESCAPED_UNICODE)) . "'>"
             . '<label class="xo-field xo-field--inline" style="margin: 0">'
             . '<span class="xo-sr">Outil</span>'
-            . '<select class="xo-select" id="outil-nom" aria-label="Outil">' . $options . '</select>'
+            . '<select class="xo-select" data-outil-nom aria-label="Outil">' . $options . '</select>'
             . '</label>'
             . '<label class="xo-search" style="flex: 1 1 20ch; min-width: 12ch">'
             . '<span class="xo-search__prefix" aria-hidden="true">›</span>'
-            . '<input type="text" id="outil-valeur" aria-label="Argument">'
+            . '<input type="text" data-outil-valeur aria-label="Argument">'
             . '</label>'
-            . '<button class="xo-btn xo-btn--ghost" type="button" id="outil-lancer">Lancer</button>'
+            . '<button class="xo-btn xo-btn--ghost" type="button" data-outil-lancer>Lancer</button>'
             . '</div>'
-            . '<p class="xo-hint" id="outil-aide"></p>';
+            . '<p class="xo-hint" data-outil-aide></p>';
     }
 
     /* ---- L'inspecteur ------------------------------------------------------ */

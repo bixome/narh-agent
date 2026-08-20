@@ -283,6 +283,7 @@ async function commander(action, item = null, porte = 'inconnue', argument = '')
     case 'journal':
     case 'memoire':
     case 'conduites':
+    case 'outils':
       await poserTuile(action);
       return;
 
@@ -670,6 +671,9 @@ function poserTours(html) {
   }
 
   mount(liste);
+  // Les tuiles Outils qui viennent d'entrer : leur aide se remplit à
+  // l'insertion, pas au premier clic sur le select.
+  monterFormulairesOutil(liste);
   selectionUnique(selection());   // le choix de l’utilisateur, pas la dernière liste montée
   document.getElementById('accueil')?.remove();
 
@@ -723,13 +727,11 @@ async function appelerFils(action = 'etat', id = 0) {
     // les jetons relus en base, la fenêtre du modèle chez Ollama.
     remplir('jauge-contexte', data.contexte);
 
-    /* Le poste de commande, ici et non chez les appelants : il ne se refaisait
-       qu'après un lancement **manuel** d'outil, alors qu'une réponse du modèle
-       en appelle plusieurs. Le panneau montrait donc l'avant-dernière question
-       tant qu'on ne lançait rien à la main. `appelerFils()` suit chaque
-       réponse, chaque geste sur les fils et le chargement : c'est le seul
-       endroit qui les voit tous. */
-    if (data.outils !== undefined) remplir('desk-outils', data.outils);
+    /* Plus de `remplir('desk-outils')` : le poste de commande était un panneau
+       fixe du Newsdesk qu'il fallait refaire à la main. C'est une tuile, et
+       une tuile se refait avec le fil — `poserTours()` s'en charge pour toutes
+       à la fois. Le compteur, lui, reste tenu ici : il vit dans la rangée du
+       champ, qui ne se repose jamais. */
     majOutils({ compte: data.compte, echecs: data.echecs, enCours: 0 });
 
     /* « chargé » et « en ligne » sont deux choses : un modèle installé mais
@@ -1268,6 +1270,7 @@ if (direct.antenne) {
 /* Un onglet, une clé de réponse, un conteneur. Les trois marquages seulement :
    Inspecté, la veille et les outils sont fixes, ils ne s'ouvrent pas. */
 const ONGLETS = {
+  veille: 'desk-veille',
   suivis: 'desk-suivis',
   traites: 'desk-traites',
   ecartes: 'desk-ecartes',
@@ -1372,37 +1375,72 @@ document.getElementById('desk-outils')?.addEventListener('click', async (e) => {
  * dans l'attribut par PHP : un outil sans paramètre n'affiche pas de champ, et
  * on ne demande jamais ce dont l'outil n'a pas besoin.
  */
-const formulaire = document.querySelector('[data-outil-formulaire]');
-const schemaOutils = formulaire ? JSON.parse(formulaire.dataset.schema) : {};
+function majFormulaireOutil(form) {
+  if (!form) return;
 
-function majFormulaireOutil() {
-  const nom = document.getElementById('outil-nom')?.value;
-  const champ = document.getElementById('outil-valeur');
-  const schema = schemaOutils[nom];
+  // Le schéma voyage avec le formulaire : il en existe autant que de tuiles
+  // posées, et chacune répond pour elle-même.
+  let schemas = {};
+  try {
+    schemas = JSON.parse(form.dataset.schema || '{}');
+  } catch {
+    return;
+  }
+
+  const select = form.querySelector('[data-outil-nom]');
+  const champ = form.querySelector('[data-outil-valeur]');
+  const schema = schemas[select?.value];
   if (!champ || !schema) return;
 
   const sansArgument = schema.champ === null;
   champ.closest('.xo-search').hidden = sansArgument;
   champ.placeholder = schema.champ ?? '';
   champ.required = Boolean(schema.requis);
-  texte('outil-aide', sansArgument ? 'Cet outil ne prend aucun argument.' : schema.aide);
+
+  const aide = form.parentElement?.querySelector('[data-outil-aide]');
+  if (aide) aide.textContent = sansArgument ? 'Cet outil ne prend aucun argument.' : schema.aide;
 }
 
-document.getElementById('outil-nom')?.addEventListener('change', majFormulaireOutil);
-majFormulaireOutil();
+/* Délégué au document, et non branché sur les éléments au chargement.
 
-document.getElementById('outil-lancer')?.addEventListener('click', () => {
+   Le formulaire était fixe, au pied du Newsdesk : on pouvait l'attacher une
+   fois pour toutes. Il vit maintenant dans une tuile qu'on convoque, donc il
+   n'existe pas quand ce fichier s'exécute — les trois `addEventListener` du
+   démarrage ne trouvaient plus rien et « Lancer » restait inerte, sans une
+   erreur pour le dire. La délégation vaut pour toutes les tuiles, y compris
+   celles qui seront posées dans dix minutes. */
+document.addEventListener('change', (e) => {
+  const form = e.target.closest?.('[data-outil-formulaire]');
+  if (form && e.target.matches('[data-outil-nom]')) majFormulaireOutil(form);
+});
+
+document.addEventListener('click', (e) => {
+  const bouton = e.target.closest?.('[data-outil-lancer]');
+  if (!bouton) return;
+
+  const form = bouton.closest('[data-outil-formulaire]');
   lancerOutil(
-    document.getElementById('outil-nom')?.value,
-    document.getElementById('outil-valeur')?.value ?? '',
+    form?.querySelector('[data-outil-nom]')?.value,
+    form?.querySelector('[data-outil-valeur]')?.value ?? '',
   );
 });
 
-document.getElementById('outil-valeur')?.addEventListener('keydown', (e) => {
-  if (e.key !== 'Enter') return;
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' || !e.target.matches?.('[data-outil-valeur]')) return;
   e.preventDefault();
-  document.getElementById('outil-lancer')?.click();
+  e.target.closest('[data-outil-formulaire]')?.querySelector('[data-outil-lancer]')?.click();
 });
+
+/* Une tuile fraîchement posée arrive avec son select sur le premier outil et
+   son aide vide : on la met à jour à l'insertion, sans quoi « Cet outil ne
+   prend aucun argument » n'apparaîtrait qu'après avoir touché au select. */
+function monterFormulairesOutil(racine = document) {
+  for (const form of racine.querySelectorAll?.('[data-outil-formulaire]') ?? []) {
+    majFormulaireOutil(form);
+  }
+}
+
+monterFormulairesOutil();
 
 /**
  * Lancer un outil, et laisser sa trace.
@@ -1420,8 +1458,9 @@ async function lancerOutil(nom, valeur) {
     const data = await reponse.json();
     if (!data.ok) throw new Error(data.erreur || 'outil refusé');
 
+    // `poserTours` a déjà refait les tuiles Outils du fil : elles montrent
+    // l'appel qu'on vient de lancer sans qu'on ait à les viser.
     poserTours(data.tours);
-    remplir('desk-outils', data.outils);
     majOutils({ compte: data.compte, echecs: data.echecs, enCours: 0 });
   } catch (erreur) {
     notifier('danger', 'Outil impossible', String(erreur.message || erreur), 5000);

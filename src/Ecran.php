@@ -74,6 +74,7 @@ final class Ecran
         'conduites'    => ['Voir ce qui se déclenche',   '',                  '', 'Tuiles', 'conduite', '', ''],
         'memoire'      => ['Voir les fils passés',       '',                  '', 'Tuiles', 'memoire', '', ''],
         'corpus'       => ['Chercher dans le corpus',    '',                  '', 'Tuiles', 'chercher', '', ''],
+        'outils'       => ['Voir les outils du fil',     '',                  '', 'Tuiles', 'outils', '', ''],
         'inspecter'    => ['Inspecter la ligne',         'depeche evenement', '', 'Tuiles', 'inspecter', 'inspecter', ''],
         'suivi'        => ["Suivre l'événement",         'depeche evenement', '', 'Veille', 'suivre', 'suivre', 'marque le groupe suivi'],
         'traite'       => ['Marquer traité',             'depeche evenement', '', 'Veille', 'traite', 'traité', 'marque le groupe traité'],
@@ -479,7 +480,7 @@ final class Ecran
                deviner par sa position, qui bougerait au premier ajout. -->
           <div id="zone-champ" style="flex: none; margin: 16px 0">
             <?= $bandeau ?>
-            <?= self::champ($ancre) ?>
+            <?= self::champ($ancre, count($c['appels'])) ?>
           </div>
 
           <!-- Un seul flux, quel que soit le régime.
@@ -740,14 +741,16 @@ final class Ecran
                 Memoire::bilan(),
                 Direct::enAntenne(),
             )
-            /* Les gestes qui appartiennent à celui qui regarde : ouvrir un fil
-               neuf, retrouver les anciens, régler l'agent. Le fil de veille,
-               lui, est au Newsdesk — c'est le poste, pas la personne. */
+            /* Ne reste ici que ce qui vise **la personne**.
+
+               « Fil neuf » et « Mémoire » ont rejoint la rangée du champ :
+               ils parlent du fil, et le fil se tient en dessous. Les laisser
+               dans une tuile qui sert à se repérer, c'était mettre des gestes
+               de travail dans la bande où l'on ne travaille pas — et il
+               fallait remonter en haut de l'écran pour changer de fil, alors
+               qu'on écrit en bas. Les réglages restent : ils règlent l'agent,
+               pas la conversation en cours. */
             . '<div class="xo-row" style="margin-top: 8px">'
-            . '<button class="xo-btn xo-btn--ghost" type="button" data-action="fil-neuf">'
-            . Icone::rendre('fil-neuf') . ' Fil neuf</button>'
-            . '<button class="xo-btn xo-btn--ghost" type="button" data-action="memoire">'
-            . Icone::rendre('memoire') . ' Mémoire</button>'
             . '<span class="xo-spacer"></span>'
             . '<button class="xo-btn xo-btn--ghost" type="button" data-xo-open="#reglages">'
             . Icone::rendre('reglages') . ' Réglages</button>'
@@ -862,7 +865,6 @@ final class Ecran
     {
         $antenne = Direct::enAntenne();
         $alertes = $c['alertes'];
-        $appels = $c['appels'];
         $stats = $c['stats'];
         $statuts = $c['statuts'];
 
@@ -873,47 +875,11 @@ final class Ecran
             . ' style="display: flex; flex-direction: column; flex: 1; min-height: 0">'
             . '<h2 class="xo-panel__title">Newsdesk</h2>'
 
-            /* -- Ce qu'on a marqué : un onglet par état --
-               Trois onglets et non un filtre : ce sont trois décisions
-               différentes, et leur compte doit se lire sans cliquer. Plus
-               d'onglet Antenne — le régime se bascule d'un clic sur son
-               étiquette, dans la tuile Utilisateur. */
-            . '<div class="xo-tabs" data-xo-tabs role="tablist"'
-            . ' style="flex-wrap: wrap; overflow-x: visible">'
-            . '<button class="xo-tabs__tab" role="tab" aria-selected="true" aria-controls="onglet-suivis"'
-            . ' data-rafraichir="suivis">Suivis <span data-compte="suivi">'
-            . (int) $statuts['suivi'] . '</span></button>'
-            . '<button class="xo-tabs__tab" role="tab" aria-selected="false" aria-controls="onglet-traites"'
-            . ' data-rafraichir="traites">Traités <span data-compte="traite">'
-            . (int) $statuts['traite'] . '</span></button>'
-            . '<button class="xo-tabs__tab" role="tab" aria-selected="false" aria-controls="onglet-ecartes"'
-            . ' data-rafraichir="ecartes">Écartés <span data-compte="ecarte">'
-            . (int) $statuts['ecarte'] . '</span></button>'
-            . '</div>'
-
-            . '<section id="onglet-suivis" role="tabpanel" class="xo-tabpanel xo-scroll"'
-            . ' style="flex: 1; min-height: 0">'
-            . '<div id="desk-suivis">' . Vue::lignesEvenements($c['suivis']) . '</div>'
-            . '</section>'
-
-            . '<section id="onglet-traites" role="tabpanel" class="xo-tabpanel xo-scroll"'
-            . ' style="flex: 1; min-height: 0" hidden>'
-            . '<div id="desk-traites">' . Vue::lignesEvenements($c['traites']) . '</div>'
-            . '</section>'
-
-            . '<section id="onglet-ecartes" role="tabpanel" class="xo-tabpanel xo-scroll"'
-            . ' style="flex: 1; min-height: 0" hidden>'
-            . '<div id="desk-ecartes">' . Vue::lignesEvenements($c['ecartes']) . '</div>'
-            . '</section>'
-
-            /* -- Ce qui arrive : alertes puis veille, une seule liste --
-               Deux listes séparées obligeaient à choisir laquelle regarder alors
-               qu'une alerte **est** un événement de la veille, simplement passé
-               au-dessus du seuil. Réunies et ordonnées — le grave d'abord — on
-               lit une seule colonne du haut vers le bas. */
-            . '<div style="flex: none; margin-top: 8px">'
-            . '<div class="xo-rule xo-rule--start">Alertes et veille</div>'
-            . '<div class="xo-row" style="margin-bottom: 8px">'
+            /* -- La recherche, au-dessus des onglets et non dedans --
+               Elle porte sur la veille, mais la garder dans un seul onglet
+               obligeait à y revenir pour chercher. En tête de colonne, elle
+               commande la liste qu'on regarde. */
+            . '<div class="xo-row" style="flex: none; margin-bottom: 8px">'
             . '<label class="xo-search" style="flex: 1 1 12ch; min-width: 8ch">'
             . '<span class="xo-search__prefix" aria-hidden="true">/</span>'
             . '<input type="search" id="desk-q" aria-label="Chercher dans la veille"'
@@ -931,27 +897,64 @@ final class Ecran
             . ' data-xo-tip="Relever maintenant" aria-label="Relever maintenant">'
             . Icone::rendre('relever') . '</button>'
             . '</div>'
-            . '<div class="xo-scroll" id="desk-veille" style="max-height: 22vh">'
-            . Vue::lignesEvenements(self::alertesPuisVeille($alertes, $c['recents']))
-            . '</div>'
+
+            /* -- Quatre onglets : ce qui arrive, puis ce qu'on en a fait --
+               « Alertes et veille » était un second panneau sous les onglets,
+               avec son titre et sa hauteur à lui. Deux grammaires dans une
+               colonne de 289 px : les deux listes se partageaient la hauteur,
+               et aucune n'avait la place de montrer un titre — « Qua… ».
+               Réunies, une seule liste occupe la colonne entière.
+
+               L'ordre est une progression, pas un classement : ce qui arrive
+               d'abord, les décisions qu'on en tire ensuite. Veille est donc
+               l'onglet ouvert — on regarde un desk pour voir ce qui tombe,
+               pas pour relire ce qu'on a déjà traité. */
+            . '<div class="xo-tabs" data-xo-tabs role="tablist"'
+            . ' style="flex-wrap: wrap; overflow-x: visible; flex: none">'
+            . '<button class="xo-tabs__tab" role="tab" aria-selected="true" aria-controls="onglet-veille"'
+            . ' data-rafraichir="veille">Veille</button>'
+            . '<button class="xo-tabs__tab" role="tab" aria-selected="false" aria-controls="onglet-suivis"'
+            . ' data-rafraichir="suivis">Suivis <span data-compte="suivi">'
+            . (int) $statuts['suivi'] . '</span></button>'
+            . '<button class="xo-tabs__tab" role="tab" aria-selected="false" aria-controls="onglet-traites"'
+            . ' data-rafraichir="traites">Traités <span data-compte="traite">'
+            . (int) $statuts['traite'] . '</span></button>'
+            . '<button class="xo-tabs__tab" role="tab" aria-selected="false" aria-controls="onglet-ecartes"'
+            . ' data-rafraichir="ecartes">Écartés <span data-compte="ecarte">'
+            . (int) $statuts['ecarte'] . '</span></button>'
             . '</div>'
 
-            /* Les outils au pied de la colonne, hors des onglets.
-               Ce n'est pas un état qu'on consulte mais un poste de commande :
-               on veut pouvoir lancer une recherche pendant qu'on regarde les
-               alertes, sans changer d'onglet et perdre ce qu'on lisait. Il ne
-               défile pas et ne bouge pas — le reste de la colonne s'ajuste. */
-            . '<div style="flex: none; margin-top: 8px">'
-            /* Le compteur porte un ton, pas seulement un nombre : accent tant
-               qu'un appel est en cours, danger si l'un d'eux a échoué, muet
-               sinon. C'est le seul signal dont on a besoin — il est déjà à
-               l'endroit où l'on va chercher le détail, ce qui évite d'avoir à
-               regarder ailleurs pour savoir s'il faut regarder. */
-            . '<div class="xo-rule xo-rule--start">Outils '
-            . '<span id="desk-outils-compte" class="xo-muted">' . count($appels) . '</span></div>'
-            . '<div id="desk-outils">' . Vue::outils($appels) . '</div>'
-            . Vue::formulaireOutil()
+            /* Une alerte **est** un événement de la veille, simplement passé
+               au-dessus du seuil : les deux dans une seule liste, le grave
+               d'abord, et l'on lit une colonne du haut vers le bas. */
+            . '<section id="onglet-veille" role="tabpanel" class="xo-tabpanel xo-scroll"'
+            . ' style="flex: 1; min-height: 0">'
+            . '<div id="desk-veille">'
+            . Vue::lignesEvenements(self::alertesPuisVeille($alertes, $c['recents']))
             . '</div>'
+            . '</section>'
+
+            . '<section id="onglet-suivis" role="tabpanel" class="xo-tabpanel xo-scroll"'
+            . ' style="flex: 1; min-height: 0" hidden>'
+            . '<div id="desk-suivis">' . Vue::lignesEvenements($c['suivis']) . '</div>'
+            . '</section>'
+
+            . '<section id="onglet-traites" role="tabpanel" class="xo-tabpanel xo-scroll"'
+            . ' style="flex: 1; min-height: 0" hidden>'
+            . '<div id="desk-traites">' . Vue::lignesEvenements($c['traites']) . '</div>'
+            . '</section>'
+
+            . '<section id="onglet-ecartes" role="tabpanel" class="xo-tabpanel xo-scroll"'
+            . ' style="flex: 1; min-height: 0" hidden>'
+            . '<div id="desk-ecartes">' . Vue::lignesEvenements($c['ecartes']) . '</div>'
+            . '</section>'
+
+            /* Les outils ont quitté ce pied de colonne pour la conversation.
+               Ils disaient « aucun outil appelé **dans ce fil** » depuis la
+               colonne de la veille : l'état d'un fil, affiché là où l'on suit
+               ce qui arrive. Ils sont maintenant une tuile, convoquée depuis
+               la rangée du champ, avec « Fil neuf » et « Mémoire » — les
+               trois gestes qui parlent du fil, réunis là où le fil se tient. */
 
             . '</section>';
     }
@@ -993,7 +996,7 @@ final class Ecran
      * modèle, et une commande (`/veille`). C'est voulu — obliger à choisir un
      * mode avant de taper, c'est demander de savoir avant de commencer.
      */
-    private static function champ(?array $ancre): string
+    private static function champ(?array $ancre, int $appels = 0): string
     {
         /* Le champ porte un fond : nu, il se confondait avec le fil des tours,
            alors qu'il est la seule entrée de l'application. `--raise`, et non le
@@ -1009,6 +1012,32 @@ final class Ecran
             . ' autofocus>'
             . '</label>'
             . '<div class="xo-row" style="margin-top: 8px">'
+
+            /* -- Les trois gestes qui parlent du fil, contre le champ --
+
+               Ils étaient dispersés : « Fil neuf » et « Mémoire » en haut,
+               dans la tuile Utilisateur ; « Outils » tout en bas de la colonne
+               de veille, où il annonçait pourtant « aucun outil appelé **dans
+               ce fil** » — l'état de la conversation, affiché dans la bande de
+               la collecte. Trois gestes d'un même objet à trois endroits.
+
+               Ici, ils tiennent avec ce qu'ils visent, exactement comme
+               l'inspection tient contre le champ : on regarde le fil, on agit
+               dessus, on écrit. Une rangée déjà là, aucune hauteur de plus —
+               le champ ne recule pas d'un pixel.
+
+               Le compteur d'outils garde son ton (accent tant qu'un appel
+               tourne, danger si l'un a échoué) et son identifiant : c'est le
+               seul signal qui dise s'il faut aller voir, et `majOutils()` le
+               tient à jour sans savoir où il est posé. */
+            . '<button class="xo-btn xo-btn--ghost" type="button" data-action="fil-neuf">'
+            . Icone::rendre('fil-neuf') . ' Fil neuf</button>'
+            . '<button class="xo-btn xo-btn--ghost" type="button" data-action="memoire">'
+            . Icone::rendre('memoire') . ' Mémoire</button>'
+            . '<button class="xo-btn xo-btn--ghost" type="button" data-action="outils">'
+            . Icone::rendre('outils') . ' Outils '
+            . '<span id="desk-outils-compte" class="xo-muted">' . $appels . '</span></button>'
+
             /* La petite zone d'attente des gestes courts — ouvrir une tuile,
                marquer une ligne. Ceux-là n'ont pas de place dans le flux :
                sans elle, un clic restait sans réponse visible le temps de

@@ -46,6 +46,17 @@ final class Tuile
     /** Ce qui se déclenche tout seul, et ce que ça a déjà pris (règle 6). */
     public const CONDUITES = 'conduites';
 
+    /**
+     * Ce que l'agent a fait dans ce fil, et de quoi en lancer un de plus.
+     *
+     * Elle occupait le pied de la colonne de veille, en permanence, pour un
+     * contenu qui parle du **fil** — « aucun outil appelé dans ce fil », lu
+     * depuis la bande où défile la collecte. En tuile, elle obéit à la règle
+     * commune : convoquée quand on la demande, refaite à chaque lecture, et
+     * versée dans la chronologie comme le reste.
+     */
+    public const OUTILS = 'outils';
+
     public const TITRES = [
         self::VEILLE    => 'Veille',
         self::DEPECHE   => 'Dépêche',
@@ -55,6 +66,7 @@ final class Tuile
         self::LECTURE   => 'Lecture',
         self::CORPUS    => 'Corpus',
         self::CONDUITES => 'Conduites',
+        self::OUTILS    => 'Outils',
     ];
 
     /**
@@ -110,7 +122,15 @@ final class Tuile
             self::DEPECHE => $this->contenuDepeche(),
             self::JOURNAL => ['entrees' => Journal::lire((int) ($this->params['limite'] ?? 40))],
             self::ALERTES => $this->contenuAlertes(),
-            self::MEMOIRE => ['fils' => Memoire::fils(30, Agent::filId())],
+            /* Le total en plus de la page : le pied annonçait « 30 fils »
+               quand la tuile Utilisateur en comptait 46 — deux chiffres pour
+               la même chose, à trente centimètres. `fils(30)` en montre trente,
+               il ne dit pas combien il y en a. */
+            self::MEMOIRE => [
+                'fils'  => Memoire::fils(30, Agent::filId()),
+                'total' => Memoire::bilan()['fils'],
+            ],
+            self::OUTILS  => ['appels' => Memoire::outils(Agent::filId(), 20)],
             self::LECTURE => $this->contenuLecture(),
             self::CORPUS  => $this->contenuCorpus(),
             /* Les déclarées **et** les tirs : une tuile qui ne montrerait que

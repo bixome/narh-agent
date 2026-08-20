@@ -62,6 +62,9 @@ const ICONES = [
     // une conduite n'est pas un réglage qu'on tourne, c'est une décharge — elle
     // tire une fois, sur un seuil, et se lit dans la chronologie.
     'conduite'    => 'thunderbolt',
+    // La clé et non l'engrenage : l'engrenage est déjà « reglages », et ce
+    // qu'on désigne ici n'est pas un réglage mais ce que l'agent manipule.
+    'outils'      => 'wrench',
     'reglages'    => 'cog',
     'chercher'    => 'magnifier',
     'invite'      => 'code',
