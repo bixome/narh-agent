@@ -78,7 +78,7 @@ final class Ecran
         'suivi'        => ["Suivre l'événement",         'depeche evenement', '', 'Veille', 'suivre', 'suivre', 'marque le groupe suivi'],
         'traite'       => ['Marquer traité',             'depeche evenement', '', 'Veille', 'traite', 'traité', 'marque le groupe traité'],
         'ecarte'       => ['Écarter',                    'depeche evenement', '', 'Veille', 'ecarter', 'écarter', 'écarte le groupe du desk'],
-        'lire'         => ['Lire le texte ici',          'depeche evenement', '', 'Veille', 'inspecter', 'lire', ''],
+        'lire'         => ['Lire le texte ici',          'depeche evenement', '', 'Veille', 'lire', 'lire', ''],
         // `passage` aussi : un extrait de corpus porte le lien de son article,
         // et l'ouvrir marchait déjà — par accident. Ici c'est déclaré.
         'ouvrir'       => ["Ouvrir l'article",           'depeche evenement passage', '', 'Veille', 'ouvrir', 'ouvrir', ''],
@@ -114,6 +114,30 @@ final class Ecran
         // Ce qui se discute, pas ce qui est établi — voir le rang `social`.
         'social'   => 'Web social',
     ];
+
+    /**
+     * Les gestes qu'une ligne de veille propose, tels qu'elle les nomme.
+     *
+     * `COMMANDES` en est la seule source, si bien que le menu contextuel, la
+     * barre de gestes et l'aide décrivent forcément le même écran. La phrase
+     * était écrite à la main : elle annonçait cinq gestes quand le menu en
+     * offrait sept, « inspecter » et « lire » s'étant ajoutés sans elle.
+     *
+     * On prend le libellé **court** — celui que la barre de gestes affiche —
+     * plutôt que le long : l'aide doit nommer ce qu'on lit à l'écran, pas une
+     * autre formulation de la même chose.
+     */
+    private static function gestesDeLigne(): string
+    {
+        $verbes = [];
+        foreach (self::COMMANDES as [, $natures, , , , $court]) {
+            if ($court !== '' && str_contains($natures, 'evenement')) {
+                $verbes[] = $court;
+            }
+        }
+
+        return ucfirst(implode(', ', $verbes));
+    }
 
     /**
      * Le contexte : ce que la barre d'état doit dire, et rien de plus.
@@ -641,7 +665,12 @@ final class Ecran
   <p class="xo-help__title">Se servir de NARH</p>
   <dl class="xo-help__grid">
     <dt class="xo-help__group">Une seule lecture</dt>
-    <dt>La conversation</dt><dd>Tout s'y passe : ce qu'on demande, et ce que ça donne.</dd>
+    <!-- Sans l'article : « La conversation » était le seul terme trop long pour
+         la colonne de `xo-help__grid`, qui aligne à droite. Il se coupait en
+         deux — « La » en fin de colonne, « conversation » rejeté à la ligne
+         suivante, à gauche, hors de la grille que tous les autres respectent.
+         Le mot seul suffit à nommer, et il tient. -->
+    <dt>Conversation</dt><dd>Tout s'y passe : ce qu'on demande, et ce que ça donne.</dd>
     <dt>Une tuile</dt><dd>Un résultat encadré, posé dans le fil. Elle se refait à chaque lecture.</dd>
 
     <dt class="xo-help__group">Convoquer</dt>
@@ -653,7 +682,12 @@ final class Ecran
 
     <dt class="xo-help__group">Sur une ligne de tuile</dt>
     <dt>Clic</dt><dd>La sélectionne.</dd>
-    <dt>Clic droit</dt><dd>Suivre, traiter, écarter, ouvrir, interroger l'agent.</dd>
+    <!-- Énumérée depuis COMMANDES et non à la main : la liste écrite disait
+         « suivre, traiter, écarter, ouvrir, interroger » quand le menu en
+         proposait sept — « inspecter » et « lire » s'étaient ajoutés sans
+         qu'elle bouge. Une aide qui décrit un écran d'avant est pire que pas
+         d'aide, et rien ne signale qu'elle a vieilli. -->
+    <dt>Clic droit</dt><dd><?= e(self::gestesDeLigne()) ?>.</dd>
     <dt>Double-clic</dt><dd>Ouvre l'article dans un onglet.</dd>
     <dt>Teinte</dt><dd>Elle dit le marquage ; la pâleur dit l'âge.</dd>
   </dl>
@@ -884,10 +918,18 @@ final class Ecran
             . '<span class="xo-search__prefix" aria-hidden="true">/</span>'
             . '<input type="search" id="desk-q" aria-label="Chercher dans la veille"'
             . ' placeholder="chercher…"></label>'
+            /* Les deux seuls boutons de l'écran dont l'icône soit toute la
+               parole — le reste des gestes écrit son verbe à côté. Ils gardent
+               leur `aria-label` faute de pouvoir l'écrire : sans lui, un
+               lecteur d'écran annonce « bouton », deux fois, et l'infobulle ne
+               le rattrape pas puisqu'elle demande une souris. Le bouton de
+               fermeture de l'inspection fait déjà les deux. */
             . '<button class="xo-btn xo-btn--ghost" type="button" data-action="veille"'
-            . ' data-xo-tip="Poser le fil en tuile">' . Icone::rendre('veille') . '</button>'
+            . ' data-xo-tip="Poser le fil en tuile" aria-label="Poser le fil en tuile">'
+            . Icone::rendre('veille') . '</button>'
             . '<button class="xo-btn xo-btn--ghost" type="button" data-action="relever"'
-            . ' data-xo-tip="Relever maintenant">' . Icone::rendre('relever') . '</button>'
+            . ' data-xo-tip="Relever maintenant" aria-label="Relever maintenant">'
+            . Icone::rendre('relever') . '</button>'
             . '</div>'
             . '<div class="xo-scroll" id="desk-veille" style="max-height: 22vh">'
             . Vue::lignesEvenements(self::alertesPuisVeille($alertes, $c['recents']))

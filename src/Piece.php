@@ -104,9 +104,17 @@ final class Piece
             titre: (string) $a['titre'],
             acteur: (string) ($a['source_nom'] ?? ''),
             poids: (int) $a['niveau'],
-            // « rédactions », pas « sources » : depuis que la reprise compte par
-            // maison, ce nombre est celui des salles qui ont titré, pas des flux.
-            meta: $reprises > 1 ? '×' . $reprises . ' rédactions' : Util::age((int) $a['date_tri']),
+            /* L'acteur dit **qui**, le méta dit **quand** — sans exception,
+               sinon la même colonne change de sujet d'une ligne à l'autre.
+
+               Le compte de reprises a été retiré d'ici : il porte sur le
+               groupe, jamais sur cette dépêche-là. Affiché sur chacune, il
+               donnait « Ouest-France … ×3 rédactions » puis « franceinfo …
+               ×3 rédactions » — la même reprise recomptée à chaque ligne,
+               comme si Ouest-France s'était repris trois fois lui-même. Le
+               nombre reste sur l'événement, où il est vrai, et la place
+               revient au titre. */
+            meta: Util::age((int) $a['date_tri']),
             marque: (string) ($a['statut'] ?? ''),
             attributs: array_filter([
                 'lien'   => (string) ($a['lien'] ?? ''),
@@ -148,14 +156,29 @@ final class Piece
             ?: (int) ($g['depeches'][0]['id'] ?? 0)
             ?: (int) ($g['dernier_article'] ?? 0);
 
+        /* L'instant, résolu **une fois** pour l'heure et pour l'âge.
+
+           Les deux le lisaient chacun de leur côté, et l'un des deux avait
+           oublié le repli : `arbre()` ne nomme pas la colonne `tri` mais
+           `dernier`, si bien que l'âge tombait sur zéro et s'affichait
+           « 01/01 01:00 » — une date de 1970 au milieu du Newsdesk. Deux
+           lectures de la même chose finissent toujours par diverger. */
+        $quand = (int) ($g['tri'] ?? $g['dernier'] ?? 0);
+
         return new self(
             nature: self::EVENEMENT,
             id: (string) ($article > 0 ? $article : (int) $g['id']),
-            quand: (int) ($g['tri'] ?? $g['dernier'] ?? 0),
+            quand: $quand,
             titre: (string) $g['titre'],
             acteur: $sources > 1 ? $sources . ' rédactions' : (string) ($g['source_nom'] ?? ''),
             poids: (int) $g['niveau'],
-            meta: $sources > 1 ? '×' . $sources : Util::age((int) ($g['tri'] ?? 0)),
+            /* Le méta portait « ×3 » pendant que l'acteur portait déjà
+               « 3 rédactions » : deux fois le même nombre sur une ligne, aux
+               deux bouts. Ce qu'on perdait n'était pas de la place mais une
+               information — l'âge, que toutes les autres lignes affichent là.
+               Une colonne qui dit l'heure ici et un décompte ailleurs oblige à
+               relire son intitulé à chaque ligne. */
+            meta: Util::age($quand),
             marque: (string) ($g['statut'] ?? ''),
             attributs: array_filter([
                 'groupe' => (string) (int) $g['id'],

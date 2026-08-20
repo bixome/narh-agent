@@ -44,6 +44,10 @@ const ICONES = [
 
     // Les commandes
     'inspecter'   => 'eye',
+    // « lire » avait pris l'œil d'« inspecter », et les deux se suivent dans la
+    // même barre de gestes : deux verbes, un seul dessin. Le livre les sépare,
+    // et il dit la bonne chose — inspecter montre la fiche, lire ouvre le texte.
+    'lire'        => 'read',
     'journal'     => 'clock',
     'memoire'     => 'archive',
     'fils'        => 'chat',

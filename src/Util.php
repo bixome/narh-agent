@@ -229,7 +229,16 @@ final class Util
         return $ts;
     }
 
-    /** « il y a 3 min », « il y a 2 h », « hier 14:02 ». */
+    /**
+     * « 3 min », « 2 h », « hier 14:02 » — la distance dans le temps.
+     *
+     * Sans « il y a » : la formule était identique sur toutes les lignes, donc
+     * ne distinguait rien, et coûtait sept caractères **par ligne** dans la
+     * colonne la plus étroite de l'écran. Le Newsdesk tient sur 289 px : sept
+     * caractères y valent le tiers d'un titre. Ce qui se répète à l'identique
+     * n'informe pas, il décore — et la colonne jouxte déjà l'heure, si bien
+     * qu'on la lit comme du temps sans qu'on ait à l'annoncer.
+     */
     public static function age(int $ts, ?int $maintenant = null): string
     {
         $delta = ($maintenant ?? time()) - $ts;
@@ -238,10 +247,10 @@ final class Util
             return "à l'instant";
         }
         if ($delta < 3600) {
-            return 'il y a ' . (int) round($delta / 60) . ' min';
+            return (int) round($delta / 60) . ' min';
         }
         if ($delta < 86400) {
-            return 'il y a ' . (int) floor($delta / 3600) . ' h';
+            return (int) floor($delta / 3600) . ' h';
         }
         if ($delta < 172800) {
             return 'hier ' . date('H:i', $ts);
