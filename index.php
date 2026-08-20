@@ -20,6 +20,13 @@ require __DIR__ . '/bootstrap.php';
 $c = Ecran::contexte();
 
 $fil = Agent::filId();
+
+/* La page ne fait que lire : le fil est connu, la session n'a plus rien à
+   dire. Tout ce qui suit — les messages, la veille, le rendu — se fait sans
+   tenir le verrou, sans quoi ouvrir un second onglet mettrait le premier en
+   attente. */
+Agent::filRendreLaMain();
+
 $tours = $fil > 0 ? Memoire::messages($fil) : [];
 
 /* Le pont, sens veille → agent : `?depeche=` désigne la dépêche sur laquelle on

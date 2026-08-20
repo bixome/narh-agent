@@ -2,7 +2,9 @@
 declare(strict_types=1);
 require __DIR__ . '/../bootstrap.php';
 
-session_start();
+/* La session s'ouvre au moment où le tour est versé, pas ici : `Agent::filId()`
+   s'en charge. Le rendu qui suit peut aller lire un article — une à deux
+   secondes hors du serveur — et rien n'oblige l'écran à attendre derrière. */
 
 /**
  * Poser une tuile dans la conversation.
@@ -58,6 +60,10 @@ try {
 
     Agent::tourAjouter('tuile', $dit, [], null, 0, [$tuile]);
     Journal::noter('info', 'écran', 'tuile ' . $type . ($params !== [] ? ' (' . json_encode($params, JSON_UNESCAPED_UNICODE) . ')' : ''));
+
+    // Le tour est versé : plus rien à écrire en session, et le rendu d'une
+    // tuile peut être long. On rend la main avant, pas après.
+    Agent::filRendreLaMain();
 
     $fil = Agent::filId();
 

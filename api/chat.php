@@ -62,6 +62,16 @@ if ($depeche > 0 && Agent::ancrer($depeche)) {
 Agent::tourAjouter('user', $message);
 Journal::noter('info', 'agent', 'requête : ' . mb_strimwidth($message, 0, 80, '…'));
 
+/* Le fil est créé, la session n'a plus rien à écrire : on rend le verrou
+   **avant** de générer. C'était le pire blocage de l'écran — PHP tient le
+   fichier de session jusqu'à la fin du script, et ce script-ci dure le temps
+   d'une réponse entière. Mesuré pendant qu'il streamait : `api.php?action=etat`
+   passait de 57 ms à 3,4 s, `api/fils.php` de 130 ms à 18,5 s, et la saisie
+   accusait le même retard — on tapait derrière la file.
+
+   Ce qui suit ne fait plus que lire le fil, et `filId()` s'en souvient. */
+Agent::filRendreLaMain();
+
 try {
     $debut = microtime(true);
     $historique = array_slice(Agent::tours(), -20);

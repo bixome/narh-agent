@@ -2,7 +2,13 @@
 declare(strict_types=1);
 require __DIR__ . '/../bootstrap.php';
 
-session_start();
+/* Pas de `session_start()` ici, et c'est délibéré. Des quatre actions, deux
+   seulement touchent au fil — `fermer` et `quart`, qui y versent la note de
+   quart — et `Agent::filId()` ouvre la session pour elles au moment voulu.
+   `segment` et `voix` n'en ont aucun besoin : ce sont les deux plus
+   fréquentes, une toutes les onze secondes, et `voix` attend le modèle.
+   Ouvrir la session d'entrée revenait à verrouiller l'écran entier pendant
+   qu'on demandait une phrase — mesuré à 17 s dans le pire cas. */
 
 /**
  * Le direct — l'antenne.

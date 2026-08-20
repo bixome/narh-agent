@@ -2,7 +2,10 @@
 declare(strict_types=1);
 require __DIR__ . '/../bootstrap.php';
 
-session_start();
+/* Pas de session avant d'en avoir besoin : `Outils::executer()` tourne juste
+   au-dessus du tour qu'on verse, et un outil peut lire un article ou chercher
+   sur le web. L'ouvrir ici aurait tenu l'écran verrouillé pendant ce
+   temps-là ; `Agent::filId()` l'ouvre au bon moment, une fois l'outil rendu. */
 
 /**
  * Lancer un outil à la main, depuis le Newsdesk.
@@ -71,6 +74,9 @@ try {
         'outil ' . $nom . ($valeur !== '' ? " « $valeur »" : '') . ($sortie['ok'] ? '' : ' — échec'),
         $ms,
     );
+
+    // Le tour est versé : le rendu qui suit n'a plus qu'à lire.
+    Agent::filRendreLaMain();
 
     $fil = Agent::filId();
 

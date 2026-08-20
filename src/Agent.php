@@ -94,24 +94,44 @@ final class Agent
        La session ne retient que l'identifiant du fil ouvert ; son contenu vit
        en base (CLAUDE.md, § Ce qu'on ne recopie pas). */
 
+    /* Le fil résolu, pour la durée de la requête et pas au-delà.
+
+       Il existe pour que refermer la session serve à quelque chose. PHP tient
+       le fichier de session verrouillé jusqu'à la fin du script : tant que
+       `api/chat.php` streame, aucune autre requête du même navigateur ne
+       passe — mesuré, l'écran entier se met en file derrière la génération.
+       On rend donc la main dès que la session n'a plus rien à écrire.
+
+       Sans ce souvenir, le premier `filId()` qui suit rouvrirait la session —
+       donc reprendrait le verrou — pour relire une valeur déjà connue.
+       `api/chat.php` relit le fil trois fois **après** avoir rendu la main. */
+    private static ?int $filCourant = null;
+
     public static function filId(bool $creer = false): int
     {
+        /* Un 0 en mémoire vaut réponse tant qu'on ne demande pas de créer :
+           « pas de fil » est un fait acquis, et le redemander à la session
+           coûterait le verrou pour la même réponse. */
+        if (self::$filCourant !== null && (self::$filCourant > 0 || !$creer)) {
+            return self::$filCourant;
+        }
+
         if (session_status() !== PHP_SESSION_ACTIVE) {
             session_start();
         }
 
         $id = (int) ($_SESSION['fil_id'] ?? 0);
         if ($id > 0 && Memoire::filExiste($id)) {
-            return $id;
+            return self::$filCourant = $id;
         }
         if (!$creer) {
-            return 0;
+            return self::$filCourant = 0;
         }
 
         $id = Memoire::filCreer();
         $_SESSION['fil_id'] = $id;
 
-        return $id;
+        return self::$filCourant = $id;
     }
 
     public static function filOuvrir(int $id): bool
@@ -123,6 +143,7 @@ final class Agent
             session_start();
         }
         $_SESSION['fil_id'] = $id;
+        self::$filCourant = $id;
 
         return true;
     }
@@ -133,6 +154,26 @@ final class Agent
             session_start();
         }
         unset($_SESSION['fil_id']);
+        // À null et non à 0 : le prochain `filId(true)` doit pouvoir créer.
+        self::$filCourant = null;
+    }
+
+    /**
+     * Rendre le verrou de session, la lecture du fil étant faite.
+     *
+     * À appeler dès qu'une route n'a plus rien à écrire en session — et
+     * toujours **avant** ce qui prend du temps : un stream, un appel au
+     * modèle, un rendu. Ce qui suit continue de lire le fil par
+     * `filId()`, qui s'en souvient et ne rouvre rien.
+     *
+     * Sans effet si la session n'a jamais été ouverte : les routes qui n'en
+     * veulent pas n'ont pas à s'en soucier.
+     */
+    public static function filRendreLaMain(): void
+    {
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            session_write_close();
+        }
     }
 
     /** @return list<array<string, mixed>> */

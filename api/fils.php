@@ -59,6 +59,14 @@ try {
     };
 
     $courant = Agent::filId();
+
+    /* Les actions au-dessus sont les seules à écrire en session. Ce qui suit
+       interroge le moteur et rend la conversation entière — une cinquantaine
+       de kilo-octets — et n'a aucune raison de garder le verrou pendant ce
+       temps. Mesuré avant : 18,5 s au chargement, le temps que la file
+       s'écoule. */
+    Agent::filRendreLaMain();
+
     Memoire::purgerVides($courant);
 
     /* L'état du moteur vit aussi entre les questions : un modèle se décharge
