@@ -22,6 +22,21 @@ declare(strict_types=1);
 final class Ecran
 {
     /**
+     * Combien de lignes un onglet du Newsdesk sert.
+     *
+     * Déclaré ici parce que `Ecran::contexte()` et `api/fils.php` bâtissent les
+     * mêmes quatre listes : deux nombres auraient divergé au premier réglage, et
+     * un onglet aurait alors changé de contenu selon qu'on venait de charger la
+     * page ou de le rouvrir.
+     *
+     * Douze auparavant, ce qui laissait plus de la moitié de la colonne vide —
+     * mesuré : 15 lignes servies pour une hauteur qui en tient une quarantaine.
+     * Le plafond de `Base::arbre()` est à 400 ; quarante remplit un écran haut
+     * sans faire payer une liste que personne ne déroulera.
+     */
+    public const DESK_LIGNES = 40;
+
+    /**
      * Les commandes, déclarées une fois.
      *
      * Le menu contextuel, la palette et le champ lisent tous cette table.
@@ -196,18 +211,29 @@ final class Ecran
             'cycle'      => $base->cycle(),
             // Pour l'en-tête : ce qui doit rester sous les yeux sans qu'on le
             // demande. Court — trois lignes, pas un panneau.
-            'alertes'    => $base->alertes($maintenant - 21600, Alerte::ALERTE, 3),
-            // L'onglet Veille du Newsdesk : de quoi jeter un œil sans convoquer
-            // une tuile. Court — c'est un aperçu, pas le fil.
-            'recents'    => $base->arbre([], 12),
+            'alertes'    => $base->alertes($maintenant - 21600, Alerte::ALERTE, 3, true),
+            /* L'onglet Veille du Newsdesk. Classé par consistance et non par
+               heure : voir `Base::CONSISTANCE` pour la mesure qui l'a décidé.
+
+               Les trois onglets de marquage gardent l'ordre d'arrivée — on y
+               revient pour retrouver ce qu'on a rangé, et le plus récemment
+               rangé est celui qu'on cherche. Trier ses propres décisions par
+               ampleur reviendrait à cacher la dernière au milieu de la pile. */
+            'recents'    => $base->arbre(['classement' => 'consistance', 'description' => true, 'traitement' => true], self::DESK_LIGNES),
             /* Les gestes de desk ne partent pas dans le vide : suivre, traiter
                et écarter écrivent un état en base, et le Newsdesk le rend avec
                son compte. Sans cela, on marque sans jamais revoir ce qu'on a
                marqué — le geste n'a alors aucune conséquence lisible. */
             'statuts'    => $base->comptesStatuts(),
-            'suivis'     => $base->arbre(['statut' => 'suivi'], 12),
-            'traites'    => $base->arbre(['statut' => 'traite'], 12),
-            'ecartes'    => $base->arbre(['statut' => 'ecarte'], 12),
+            /* `traitement` ici et pas sur la veille : c'est dans ces trois
+               onglets que le desk se donnait le travail de l'agent, et c'est
+               donc là que la distinction doit se lire. La veille montre ce qui
+               arrive — rien n'y a encore été décidé par personne. */
+            /* Une seule liste pour les trois marquages — l'onglet OSINT. Voir
+               `Base::clauses()` : trois onglets pour un geste à trois issues
+               coûtaient une ligne d'onglets entière et cassaient la lecture
+               d'un dossier suivi puis traité. */
+            'osint'      => $base->arbre(['marques' => true, 'traitement' => true, 'description' => true], self::DESK_LIGNES),
             // L'onglet Outils : ce que l'agent a déjà fait dans ce fil.
             'appels'     => Memoire::outils(Agent::filId(), 20),
             // Plus de liste de fils en surface : un seul « fil » à l'écran, et
@@ -497,7 +523,25 @@ final class Ecran
                Les segments de l'antenne et les tours de conversation s'y mêlent
                dans l'ordre où ils sont arrivés — c'est la même chronologie, et
                c'était le sens de la règle 7 depuis le début. -->
-          <div class="xo-scroll" id="flux" style="flex: 1; min-height: 0; padding-right: 1ch">
+          <!-- `data-xo-menu` est posé **ici**, sur le contenant qui ne bouge
+               jamais, et non sur chaque `<ul>` que `Vue` rend.
+
+               XOSHUI câble un écouteur de clic sur le menu partagé **par liste
+               montée**, chacun avec sa propre cible ; un choix dans le menu émet
+               donc autant de fois `xo:menu` qu'il y a de listes vivantes, et
+               `commander()` s'exécute autant de fois. Mesuré : 7 tirs pour un
+               clic au chargement, 15 après cinq minutes d'antenne — un segment
+               de direct pose une liste toutes les 17 s, et elles s'accumulent
+               dans le flux sans jamais en sortir. Après une heure, un clic droit
+               valait ~214 exécutions. Un seul tir portait la bonne ligne, tous
+               les autres se rabattaient sur `selection()`, c'est-à-dire la même
+               ligne : `interroger` interrogeait le modèle deux cents fois.
+
+               Le flux est monté une fois pour toutes et contient tout ce qui
+               s'y pose ensuite — tuiles, segments, sources. Un écouteur, pour
+               toujours. -->
+          <div class="xo-scroll" id="flux" data-xo-menu="#menu-narh"
+               style="flex: 1; min-height: 0; padding-right: 1ch">
             <ul class="xo-timeline" id="flux-liste"><?= Vue::tours($tours) ?></ul>
 
             <?php if ($tours === []): ?>
@@ -522,7 +566,12 @@ final class Ecran
 
         </div>
 
-        <aside class="xo-col-4" style="display: flex; flex-direction: column; min-height: 0"
+        <!-- Le second point de montage du menu contextuel, pour la même raison
+             que le flux : les quatre onglets refont leurs listes à chaque geste
+             de desk, et le menu se serait dédoublé à chaque fois. La colonne,
+             elle, ne se repose jamais. -->
+        <aside class="xo-col-4" data-xo-menu="#menu-narh"
+               style="display: flex; flex-direction: column; min-height: 0"
                aria-label="Newsdesk">
           <?= self::newsdesk($c) ?>
         </aside>
@@ -915,30 +964,30 @@ final class Ecran
             . Icone::rendre('relever') . '</button>'
             . '</div>'
 
-            /* -- Quatre onglets : ce qui arrive, puis ce qu'on en a fait --
-               « Alertes et veille » était un second panneau sous les onglets,
-               avec son titre et sa hauteur à lui. Deux grammaires dans une
-               colonne de 289 px : les deux listes se partageaient la hauteur,
-               et aucune n'avait la place de montrer un titre — « Qua… ».
-               Réunies, une seule liste occupe la colonne entière.
+            /* -- Deux onglets : ce qui arrive, ce dont on s'est occupé --
+               Quatre auparavant — Veille, Suivis, Traités, Écartés — ce qui
+               débordait sur une seconde ligne d'onglets, en permanence, dans
+               la colonne la plus étroite de l'écran.
 
-               L'ordre est une progression, pas un classement : ce qui arrive
-               d'abord, les décisions qu'on en tire ensuite. Veille est donc
-               l'onglet ouvert — on regarde un desk pour voir ce qui tombe,
-               pas pour relire ce qu'on a déjà traité. */
+               Suivi, traité et écarté sont **un geste à trois issues**, pas
+               trois sujets : ce dont on s'est occupé. Les séparer donnait une
+               place et une pastille permanentes à ce qu'on avait décidé de ne
+               plus regarder, et cassait la lecture d'un dossier — un sujet
+               suivi puis traité changeait d'onglet sans prévenir, et restait
+               introuvable pour qui n'avait pas deviné lequel. L'état se lit
+               maintenant sur la carte, en toutes lettres.
+
+               L'ordre reste une progression : ce qui arrive d'abord, les
+               décisions ensuite. Veille est l'onglet ouvert — on regarde un
+               desk pour voir ce qui tombe, pas pour relire ce qu'on a traité. */
             . '<div class="xo-tabs" data-xo-tabs role="tablist"'
             . ' style="flex-wrap: wrap; overflow-x: visible; flex: none">'
             . '<button class="xo-tabs__tab" role="tab" aria-selected="true" aria-controls="onglet-veille"'
             . ' data-rafraichir="veille">Veille</button>'
-            . '<button class="xo-tabs__tab" role="tab" aria-selected="false" aria-controls="onglet-suivis"'
-            . ' data-rafraichir="suivis">Suivis <span data-compte="suivi">'
-            . (int) $statuts['suivi'] . '</span></button>'
-            . '<button class="xo-tabs__tab" role="tab" aria-selected="false" aria-controls="onglet-traites"'
-            . ' data-rafraichir="traites">Traités <span data-compte="traite">'
-            . (int) $statuts['traite'] . '</span></button>'
-            . '<button class="xo-tabs__tab" role="tab" aria-selected="false" aria-controls="onglet-ecartes"'
-            . ' data-rafraichir="ecartes">Écartés <span data-compte="ecarte">'
-            . (int) $statuts['ecarte'] . '</span></button>'
+            . '<button class="xo-tabs__tab" role="tab" aria-selected="false" aria-controls="onglet-osint"'
+            . ' data-rafraichir="osint">OSINT <span data-compte="marques">'
+            . (int) ($statuts['suivi'] + $statuts['traite'] + $statuts['ecarte'])
+            . '</span></button>'
             . '</div>'
 
             /* Une alerte **est** un événement de la veille, simplement passé
@@ -946,24 +995,23 @@ final class Ecran
                d'abord, et l'on lit une colonne du haut vers le bas. */
             . '<section id="onglet-veille" role="tabpanel" class="xo-tabpanel xo-scroll"'
             . ' style="flex: 1; min-height: 0">'
+            /* Pas de total pour la veille : c'est un flux, pas un ensemble. Les
+               21 151 événements de la base ne sont pas « le reste » de ce qu'on
+               regarde ici, et « 40 sur 21 151 » ne dirait rien. Les trois
+               marquages, eux, sont finis — on les a faits soi-même — et leur
+               compte est exactement ce qu'on cherche à retrouver. */
             . '<div id="desk-veille">'
             . Vue::lignesEvenements(self::alertesPuisVeille($alertes, $c['recents']))
             . '</div>'
             . '</section>'
 
-            . '<section id="onglet-suivis" role="tabpanel" class="xo-tabpanel xo-scroll"'
+            . '<section id="onglet-osint" role="tabpanel" class="xo-tabpanel xo-scroll"'
             . ' style="flex: 1; min-height: 0" hidden>'
-            . '<div id="desk-suivis">' . Vue::lignesEvenements($c['suivis']) . '</div>'
-            . '</section>'
-
-            . '<section id="onglet-traites" role="tabpanel" class="xo-tabpanel xo-scroll"'
-            . ' style="flex: 1; min-height: 0" hidden>'
-            . '<div id="desk-traites">' . Vue::lignesEvenements($c['traites']) . '</div>'
-            . '</section>'
-
-            . '<section id="onglet-ecartes" role="tabpanel" class="xo-tabpanel xo-scroll"'
-            . ' style="flex: 1; min-height: 0" hidden>'
-            . '<div id="desk-ecartes">' . Vue::lignesEvenements($c['ecartes']) . '</div>'
+            . '<div id="desk-osint">'
+            . Vue::lignesEvenements(
+                $c['osint'],
+                (int) ($statuts['suivi'] + $statuts['traite'] + $statuts['ecarte']),
+            ) . '</div>'
             . '</section>'
 
             /* Les outils ont quitté ce pied de colonne pour la conversation.

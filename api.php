@@ -126,7 +126,19 @@ try {
        veille est une tuile et non un écran, redemander trois cents lignes pour
        mettre à jour quatre compteurs serait payer cher un chiffre. Le cycle
        opportuniste, lui, reste — c'est ce qui fait tourner la collecte quand
-       aucun démon ne le fait. */
+       aucun démon ne le fait.
+
+       **Cette route a donc deux temps de réponse, et c'est voulu.** Mesuré sur
+       trente sondages sans démon : vingt-huit sans cycle tiennent en 53 ms de
+       médiane et 79 ms au pire, les deux qui ont relevé ont pris 1 354 et
+       1 878 ms. Les pics sont les cycles, un pour un — ils vont chercher des
+       flux sur le réseau, et `cycle_max` les borne à quinze secondes.
+
+       Le piège est dans la lecture : une médiane saine avec de rares pointes
+       à deux secondes ressemble à s'y méprendre à une contention, et l'on part
+       chercher un verrou qui n'existe pas. Pour que l'écran ne paie jamais la
+       collecte, c'est `php cli.php --veille` en fond et `collecte_web` à false
+       dans `config/reglages.local.php` — la route retombe alors à ses 53 ms. */
 
     if ($action === 'etat') {
         $collecteur = new Collecteur($base);

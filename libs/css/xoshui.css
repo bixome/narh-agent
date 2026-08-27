@@ -180,7 +180,56 @@ hr { border: 0; border-top: 1px solid var(--xo-rule); margin: var(--xo-pad) 0; }
 .xo-list__icon { flex: none; color: var(--xo-muted); }
 .xo-list__meta { flex: none; margin-left: auto; color: var(--xo-muted); padding-left: 2ch; }
 
+/* Le libellé d'une entrée. En ligne simple il se tronque comme ses voisins —
+   la règle `> *` ci-dessus s'en charge déjà, et rien n'est changé ici. Il porte
+   un nom parce qu'en carte, c'est lui seul qui doit prendre la largeur, et
+   qu'une feuille de style ne peut pas deviner lequel des enfants est le titre. */
+.xo-list__titre { min-width: 0; }
+
 .xo-list--tree .xo-list__item { padding-left: calc(var(--xo-gap) + var(--xo-depth, 0) * 2ch); }
+
+/* Liste en cartes : deux lignes par entrée.
+   Le libellé passe seul sur la première ligne et prend toute la largeur ; le
+   glyphe, l'heure, l'acteur et la méta se rangent sur la seconde.
+
+   C'est la réponse aux colonnes étroites. Sur une colonne de 396 px — un
+   panneau latéral de console — une entrée en ligne simple donne 34 % de sa
+   largeur au libellé et le reste aux colonnes de service : les titres se
+   coupent au sixième mot, avant d'être lisibles. Empiler divise par deux le
+   nombre d'entrées visibles ; c'est le prix, et il ne vaut d'être payé que là
+   où l'on ne balaye pas mais où l'on lit.
+
+   `order: -1` plutôt qu'un réordonnancement du balisage : la même méthode rend
+   toutes les listes de l'application, et une carte ne doit pas être un second
+   gabarit qu'il faudrait maintenir en parallèle. */
+.xo-list--carte .xo-list__item {
+  flex-wrap: wrap;
+  white-space: normal;
+  padding-top: var(--xo-gap);
+  padding-bottom: var(--xo-gap);
+}
+.xo-list--carte .xo-list__titre {
+  flex: 1 0 100%;
+  order: -1;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+/* La ligne de description d'une entrée : ce qui la qualifie en toutes lettres —
+   d'où elle vient, ce qui la corrobore, pourquoi elle est notée ainsi.
+
+   Elle prend sa propre ligne parce qu'elle est faite pour être *lue*, pas
+   balayée : une colonne de service se déchiffre au glyphe, une description se
+   lit en français. Absente du balisage quand l'entrée n'a rien à décrire — un
+   tour de conversation ou une ligne de journal n'en a pas — de sorte que la
+   même méthode de rendu sert les deux sans qu'un mode soit à passer. */
+.xo-list__detail {
+  flex: 1 0 100%;
+  color: var(--xo-muted);
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+}
 
 /* --- 6. Onglets --------------------------------------------------------- */
 
@@ -1413,6 +1462,14 @@ hr { border: 0; border-top: 1px solid var(--xo-rule); margin: var(--xo-pad) 0; }
   height: var(--xo-cell);
   align-items: center;
 }
+/* La console cale chaque entrée sur une cellule de grille. Une carte en occupe
+   deux : sans cette reprise, la seconde ligne était coupée par `height`. */
+.xo-console .xo-list--carte .xo-list__item {
+  height: auto;
+  align-items: baseline;
+  padding: var(--xo-gap) 1ch;
+}
+
 .xo-console .xo-list__item:hover { background: var(--xo-raise); }
 .xo-console .xo-list__item[aria-selected="true"] { background: var(--xo-accent); color: var(--xo-inverse); }
 /* Le curseur du terminal : la ligne sélectionnée commence par un chevron. Il est

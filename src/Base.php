@@ -358,6 +358,15 @@ final class Base
             $ou[] = 'a.id > :depuis';
             $args['depuis'] = (int) $f['depuis'];
         }
+        /* `apres` borne dans le **temps**, là où `depuis` borne sur l'identifiant.
+           Les deux existent parce qu'ils répondent à deux questions : « ce qui est
+           arrivé depuis que je regarde » (un rang, insensible aux dates fausses
+           des flux sans horodatage) et « ce qui s'est passé aujourd'hui » (une
+           fenêtre). Le classement par consistance a besoin de la seconde. */
+        if (!empty($f['apres'])) {
+            $ou[] = 'a.date_tri >= :apres';
+            $args['apres'] = (int) $f['apres'];
+        }
         if (!empty($f['rubrique']) && $f['rubrique'] !== 'tout') {
             $ou[] = 's.rubrique = :rubrique';
             $args['rubrique'] = (string) $f['rubrique'];
@@ -383,7 +392,16 @@ final class Base
            montre plus ce qui a été mis de côté. `COALESCE` couvre les dépêches
            sans groupe, que le LEFT JOIN laisse à NULL. */
         $statut = (string) ($f['statut'] ?? '');
-        if (in_array($statut, self::STATUTS, true) && $statut !== '') {
+        if (!empty($f['marques'])) {
+            /* Tout ce qui porte une décision, quelle qu'elle soit.
+               Suivi, traité et écarté étaient trois onglets, donc trois listes,
+               trois requêtes et trois pastilles pour ce qui est **un** geste à
+               trois issues : ce dont on s'est occupé. Le desk y gagne une ligne
+               d'onglets entière, et surtout la lecture continue d'un dossier —
+               un sujet suivi puis traité restait auparavant introuvable pour qui
+               n'avait pas deviné dans lequel des trois il était passé. */
+            $ou[] = "COALESCE(g.statut, '') <> ''";
+        } elseif (in_array($statut, self::STATUTS, true) && $statut !== '') {
             $ou[] = 'g.statut = :statut';
             $args['statut'] = $statut;
         } else {
@@ -528,8 +546,23 @@ final class Base
      */
     public function arbre(array $f = [], int $evenements = 120): array
     {
+        $consistance = ($f['classement'] ?? 'arrivee') === 'consistance';
+
+        /* Un classement par consistance **sans fenêtre** est un palmarès : les
+           plus gros sujets de tous les temps, figés, et rien de ce matin. La
+           fenêtre n'est donc pas une option du classement, c'en est une
+           condition — d'où le défaut posé ici plutôt que laissé à l'appelant,
+           qui l'oublierait une fois sur deux. */
+        if ($consistance && empty($f['apres'])) {
+            $f['apres'] = time() - 86400;
+        }
+
         [$ou, $args] = $this->clauses($f);
         $evenements = max(1, min($evenements, 400));
+
+        $ordre = $consistance
+            ? self::CONSISTANCE . ' DESC, tri DESC, g.id DESC'
+            : 'tri DESC, g.id DESC';
 
         $st = $this->pdo->prepare(
             'SELECT g.*, MAX(a.date_tri) AS tri, MAX(a.id) AS dernier_article
@@ -538,7 +571,7 @@ final class Base
              JOIN groupe g ON g.id = a.groupe_id
              WHERE ' . implode(' AND ', $ou) . "
              GROUP BY g.id
-             ORDER BY tri DESC, g.id DESC
+             ORDER BY $ordre
              LIMIT $evenements"
         );
         $st->execute($args);
@@ -567,8 +600,29 @@ final class Base
             $parGroupe[(int) $a['groupe_id']][] = $a;
         }
 
+        /* Le croisement avec la mémoire de l'agent, demandé et non systématique :
+           il coûte deux requêtes et un ATTACH, et le direct compose un segment
+           toutes les dix-sept secondes sans avoir rien à en faire. */
+        $traite = !empty($f['traitement']) ? $this->traitement($ids) : [];
+        $ouvreurs = !empty($f['description']) ? $this->origines($ids) : [];
+
         foreach ($groupes as &$g) {
             $g['depeches'] = $parGroupe[(int) $g['id']] ?? [];
+
+            if (!empty($f['traitement'])) {
+                $t = $traite[(int) $g['id']] ?? ['antenne' => 0, 'fois' => 0, 'conduites' => []];
+                $g['antenne']   = $t['antenne'];
+                $g['antenne_fois'] = $t['fois'];
+                $g['conduites'] = $t['conduites'];
+            }
+
+            if (!empty($f['description'])) {
+                $o = $ouvreurs[(int) $g['id']] ?? null;
+                $g['ouvreur'] = $o['maison'] ?? '';
+                $g['ouvreur_nom'] = $o['nom'] ?? '';
+                $g['ouvreur_rang'] = $o['rang'] ?? '';
+                $g['reprise'] = $o['reprise'] ?? 0;
+            }
         }
 
         return $groupes;
@@ -884,8 +938,12 @@ final class Base
      *
      * @return list<array<string, mixed>>
      */
-    public function alertes(int $depuis, int $niveauMin = Alerte::ALERTE, int $limite = 12): array
-    {
+    public function alertes(
+        int $depuis,
+        int $niveauMin = Alerte::ALERTE,
+        int $limite = 12,
+        bool $decrire = false,
+    ): array {
         /* Le lien de la dépêche de tête voyage avec l'événement : « ouvrir
            l'article » n'avait rien à ouvrir depuis les alertes, le Newsdesk ou
            la note de quart, et se rabattait sur un enfant `data-parent` qui
@@ -908,11 +966,237 @@ final class Base
         $st->bindValue('niveau', $niveauMin, PDO::PARAM_INT);
         $st->bindValue('limite', $limite, PDO::PARAM_INT);
         $st->execute();
+        $groupes = $st->fetchAll();
 
-        return $st->fetchAll();
+        /* Les alertes se mêlent aux événements dans la colonne du desk
+           (`Ecran::alertesPuisVeille()`). Sans la même description, les trois
+           premières lignes — les plus graves, donc les plus lues — étaient les
+           seules à ne rien dire de leur origine ni de leur propagation. Deux
+           gabarits dans une même liste, et c'est précisément ce que `Piece`
+           existe pour empêcher. */
+        if (!$decrire || $groupes === []) {
+            return $groupes;
+        }
+
+        $ids = array_map(static fn (array $g): int => (int) $g['id'], $groupes);
+        $ouvreurs = $this->origines($ids);
+        $traite = $this->traitement($ids);
+
+        foreach ($groupes as &$g) {
+            $id = (int) $g['id'];
+            $o = $ouvreurs[$id] ?? null;
+            $g['ouvreur'] = $o['maison'] ?? '';
+            $g['ouvreur_nom'] = $o['nom'] ?? '';
+            $g['ouvreur_rang'] = $o['rang'] ?? '';
+            $g['reprise'] = $o['reprise'] ?? 0;
+
+            $t = $traite[$id] ?? ['antenne' => 0, 'fois' => 0, 'conduites' => []];
+            $g['antenne'] = $t['antenne'];
+            $g['antenne_fois'] = $t['fois'];
+            $g['conduites'] = $t['conduites'];
+        }
+
+        return $groupes;
+    }
+
+    /* ---- Le croisement avec la mémoire de l'agent ------------------------- */
+
+    /**
+     * `narh.sqlite` attachée en **lecture seule**, une fois par instance.
+     *
+     * Premier croisement du projet : la règle 3 le réservait à cet endroit
+     * depuis le début (« les croisements passent par `ATTACH` en lecture seule,
+     * dans `src/Base.php` et nulle part ailleurs ») sans que rien n'en ait
+     * encore eu besoin.
+     *
+     * La forme URI `?mode=ro` n'est pas décorative : vérifié sur ce build, une
+     * écriture vers `ag.` est refusée par SQLite (« attempt to write a readonly
+     * database »). La discipline est donc tenue par le moteur et non par la
+     * relecture — ce qui compte pour une base que le démon écrit toutes les
+     * soixante secondes.
+     *
+     * Échouer est permis : la collecte doit rester lisible même si la mémoire
+     * de l'agent manque. On le retient pour ne pas retenter à chaque requête.
+     */
+    private ?bool $memoire = null;
+
+    private function memoire(): bool
+    {
+        if ($this->memoire !== null) {
+            return $this->memoire;
+        }
+
+        try {
+            // Les antislashs de Windows ne passent pas dans une URI SQLite.
+            $chemin = str_replace('\\', '/', (string) narh_reglage('base'));
+            $this->pdo->exec("ATTACH DATABASE 'file:{$chemin}?mode=ro' AS ag");
+            $this->memoire = true;
+        } catch (Throwable) {
+            $this->memoire = false;
+        }
+
+        return $this->memoire;
+    }
+
+    /**
+     * Ce que l'agent a fait de ces sujets : l'antenne, les conduites.
+     *
+     * C'est la fusion que le desk n'avait pas. `direct_vu` et `conduite_vu`
+     * sont toutes deux clés sur `groupe_id` — la jointure existait, personne ne
+     * la faisait. Mesuré : 4 593 sujets passés à l'antenne, et **37 %** des
+     * sujets de niveau ≥ 2 ; 27 % touchés par une conduite.
+     *
+     * Ce que ça répare, et c'est le plus urgent : sur 98 marquages, 49 viennent
+     * de la seule conduite `suivre-les-alertes`. L'onglet annonçait « Suivis »
+     * comme si l'utilisateur les avait décidés, sans distinguer nulle part sa
+     * propre décision de celle prise par une conduite à 4 h 31.
+     *
+     * @param  list<int> $ids
+     * @return array<int, array{antenne: int, fois: int, conduites: list<string>}>
+     */
+    public function traitement(array $ids): array
+    {
+        if ($ids === [] || !$this->memoire()) {
+            return [];
+        }
+
+        $trous = implode(',', array_fill(0, count($ids), '?'));
+        $par = [];
+
+        $st = $this->pdo->prepare(
+            "SELECT groupe_id, quand, fois FROM ag.direct_vu WHERE groupe_id IN ($trous)"
+        );
+        $st->execute($ids);
+        foreach ($st->fetchAll() as $d) {
+            $par[(int) $d['groupe_id']] = [
+                'antenne'   => (int) $d['quand'],
+                'fois'      => (int) $d['fois'],
+                'conduites' => [],
+            ];
+        }
+
+        $st = $this->pdo->prepare(
+            "SELECT groupe_id, nom FROM ag.conduite_vu WHERE groupe_id IN ($trous)"
+        );
+        $st->execute($ids);
+        foreach ($st->fetchAll() as $c) {
+            $id = (int) $c['groupe_id'];
+            $par[$id] ??= ['antenne' => 0, 'fois' => 0, 'conduites' => []];
+            $par[$id]['conduites'][] = (string) $c['nom'];
+        }
+
+        return $par;
+    }
+
+    /**
+     * D'où part un sujet, et à quelle vitesse il se propage.
+     *
+     * Les deux questions qu'un desk pose d'abord — *qui l'a sorti* et *qui a
+     * suivi* — et auxquelles la base pouvait répondre depuis toujours sans
+     * qu'on le lui demande : l'origine est simplement l'article de `date_tri`
+     * minimal du groupe, joint à sa source.
+     *
+     * `reprise` compte les secondes jusqu'à la **première autre maison**, et
+     * seulement une rédaction : un agrégateur qui recopie n'est pas une
+     * confirmation (c'est déjà la règle de `recalculerGroupe()`, on ne fait que
+     * l'appliquer au temps).
+     *
+     * Ce que ce chiffre vaut, et ce qu'il ne vaut pas — mesuré sur 7 jours :
+     * il **décrit** bien mais **classe** mal. Le taux d'alerte est de 20 %,
+     * 21 % puis 24 % selon qu'un sujet est repris en moins de 15 minutes, moins
+     * d'une heure ou moins de trois : sous trois heures, la vitesse est du
+     * bruit. Elle n'entre donc pas dans `CONSISTANCE`, seulement dans ce que la
+     * carte donne à lire.
+     *
+     * @param  list<int> $ids
+     * @return array<int, array{nom: string, maison: string, rang: string, reprise: int}>
+     */
+    public function origines(array $ids): array
+    {
+        if ($ids === []) {
+            return [];
+        }
+
+        $trous = implode(',', array_fill(0, count($ids), '?'));
+
+        $st = $this->pdo->prepare(
+            "WITH prem AS (
+                 SELECT a.groupe_id AS gid, a.source_id, a.date_tri,
+                        ROW_NUMBER() OVER (
+                            PARTITION BY a.groupe_id ORDER BY a.date_tri ASC, a.id ASC
+                        ) AS n
+                 FROM article a WHERE a.groupe_id IN ($trous)
+             ),
+             ouvre AS (
+                 SELECT p.gid, p.date_tri AS t0, s.nom, s.rang,
+                        COALESCE(NULLIF(s.maison, ''), s.nom) AS maison
+                 FROM prem p JOIN source s ON s.id = p.source_id WHERE p.n = 1
+             )
+             SELECT o.gid, o.nom, o.maison, o.rang,
+                    COALESCE((
+                        SELECT MIN(a2.date_tri) - o.t0
+                        FROM article a2 JOIN source s2 ON s2.id = a2.source_id
+                        WHERE a2.groupe_id = o.gid
+                          AND s2.rang = 'redaction'
+                          AND COALESCE(NULLIF(s2.maison, ''), s2.nom) <> o.maison
+                    ), 0) AS reprise
+             FROM ouvre o"
+        );
+        $st->execute($ids);
+
+        $par = [];
+        foreach ($st->fetchAll() as $o) {
+            $par[(int) $o['gid']] = [
+                'nom'     => (string) $o['nom'],
+                'maison'  => (string) $o['maison'],
+                'rang'    => (string) $o['rang'],
+                'reprise' => max(0, (int) $o['reprise']),
+            ];
+        }
+
+        return $par;
     }
 
     /* ---- Conduite -------------------------------------------------------- */
+
+    /**
+     * Ce qui fait qu'un sujet **tient** — le classement du desk.
+     *
+     * Écrit une fois ici parce que c'est une règle, pas une requête : la vue
+     * reçoit un ordre, elle ne le recalcule pas.
+     *
+     * Mesuré avant d'être choisi, sur la base réelle (22 925 sujets). Le desk
+     * triait par heure d'arrivée, or **5,2 %** des sujets seulement sont repris
+     * par plus d'une maison et **5,5 %** vivent plus d'une minute : neuf des
+     * douze lignes affichées portaient `0 min · 1 maison · 1 article`, et les
+     * deux vraies histoires du jour se trouvaient en dixième et onzième
+     * position, indiscernables d'un aperçu de jeu vidéo.
+     *
+     * Les trois termes, et pourquoi ceux-là :
+     *
+     * - `sources` — les maisons qui confirment. C'est la mesure d'ampleur la
+     *   plus sûre : 13 maisons ne se discutent pas.
+     * - `niveau` — le score lexical, déjà calculé au cycle. Il pèse le plus
+     *   parce qu'il porte le sens là où les deux autres ne portent que du
+     *   volume.
+     * - `articles` — le volume produit, **plafonné à dix** : au-delà, un sujet
+     *   qui dure ne doit plus gagner de rang du seul fait qu'il dure.
+     *
+     * Ce qui a été essayé et écarté, pour qu'on ne le réessaie pas :
+     *
+     * - **La durée de vie seule.** Le sujet le plus tenace de la base est
+     *   « L'horoscope du mercredi 26 août 2026 » — 993 minutes, 2 maisons,
+     *   8 articles. Deux rédactions republiant leur horoscope toute la journée
+     *   ressemblent exactement à un sujet qui se développe. Il ne remonte ici
+     *   que parce que `niveau` vaut zéro : c'est le score lexical qui le tient,
+     *   pas l'arithmétique.
+     * - **La vitesse de propagation.** Mesurée sur 7 jours, le délai entre la
+     *   source d'origine et la deuxième maison ne discrimine rien sous trois
+     *   heures : 20 %, 21 % puis 24 % d'alertes selon qu'on est à moins de
+     *   15 min, moins d'une heure ou moins de trois. Le Népal a mis 107 minutes
+     *   à être repris et a fini à 8 maisons. La vitesse n'est donc pas un rang.
+     */
+    private const CONSISTANCE = 'g.sources * 2 + g.niveau * 3 + MIN(g.articles, 10)';
 
     /** Les quatre états possibles d'un événement au desk. */
     public const STATUTS = ['', 'suivi', 'traite', 'ecarte'];

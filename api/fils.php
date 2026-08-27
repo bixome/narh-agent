@@ -93,7 +93,11 @@ try {
        Newsdesk les redemande sans recharger la page. */
     $base = new Base((string) narh_reglage('base_veille'));
     $maintenant = time();
-    $alertes = $base->alertes($maintenant - 21600, Alerte::ALERTE, 3);
+    $alertes = $base->alertes($maintenant - 21600, Alerte::ALERTE, 3, true);
+    // Lu une fois : il sert aux pastilles des onglets **et** à la ligne « 40
+    // sur 70 » de chaque liste. Deux lectures auraient pu se contredire entre
+    // le compte de l'onglet et celui de son contenu.
+    $statuts = $base->comptesStatuts();
     $etatOutils = Memoire::etatOutils($courant);
 
     repondre([
@@ -102,7 +106,14 @@ try {
         'fils'     => Vue::fils(Memoire::fils(30, $courant), $courant),
         // Alertes et veille en une seule liste, le grave d'abord — la même que
         // celle du Newsdesk, pour qu'un rafraîchissement ne change pas l'ordre.
-        'veille'   => Vue::lignesEvenements(Ecran::alertesPuisVeille($alertes, $base->arbre([], 12))),
+        'veille'   => Vue::lignesEvenements(
+            Ecran::alertesPuisVeille(
+                $alertes,
+                // Le même classement qu'au chargement : rouvrir l'onglet ne doit
+                // pas réordonner ce qu'on était en train de lire.
+                $base->arbre(['classement' => 'consistance', 'description' => true, 'traitement' => true], Ecran::DESK_LIGNES),
+            ),
+        ),
         'outils'   => Vue::outils(Memoire::outils($courant, 20)),
         /* Le compteur du panneau. Il était lu par le navigateur (`data.compte`)
            mais n'a jamais été rendu ici : `texte()` écrivait donc la chaîne
@@ -110,12 +121,23 @@ try {
            parce qu'un appel raté ne se voit pas dans un total. */
         'compte'   => $etatOutils['compte'],
         'echecs'   => $etatOutils['echecs'],
-        // Les trois marquages, avec leurs comptes : un geste de desk change ce
-        // que ces onglets montrent, et l'onglet doit pouvoir se recharger seul.
-        'suivis'   => Vue::lignesEvenements($base->arbre(['statut' => 'suivi'], 12)),
-        'traites'  => Vue::lignesEvenements($base->arbre(['statut' => 'traite'], 12)),
-        'ecartes'  => Vue::lignesEvenements($base->arbre(['statut' => 'ecarte'], 12)),
-        'statuts'  => $base->comptesStatuts(),
+        /* Les trois marquages, avec leurs comptes : un geste de desk change ce
+           que ces onglets montrent, et l'onglet doit pouvoir se recharger seul.
+
+           Le total accompagne chaque liste, comme au chargement : sans lui, un
+           onglet rouvert perdait la ligne « 40 sur 70 » que la page servait, et
+           redevenait le compte muet qu'on vient de corriger. */
+        // Les trois marquages en une seule liste — l'onglet OSINT.
+        'osint'    => Vue::lignesEvenements(
+            $base->arbre(['marques' => true, 'traitement' => true, 'description' => true], Ecran::DESK_LIGNES),
+            (int) ($statuts['suivi'] + $statuts['traite'] + $statuts['ecarte']),
+        ),
+        /* `marques` accompagne les trois comptes : c'est lui que la pastille de
+           l'onglet affiche, et le recomposer côté navigateur aurait remis une
+           addition dans le rendu, que la règle 2 garde en PHP. */
+        'statuts'  => $statuts + [
+            'marques' => (int) ($statuts['suivi'] + $statuts['traite'] + $statuts['ecarte']),
+        ],
         'tours'    => Vue::tours($courant > 0 ? Memoire::messages($courant) : []),
         /* Le moniteur du compte : un tour de plus, des jetons de plus. Rendus
            ici comme tout le reste — le navigateur remplace un bloc déjà écrit,

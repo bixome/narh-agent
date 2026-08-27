@@ -531,8 +531,22 @@ document.addEventListener('contextmenu', (e) => {
   if (visibles === 0) menu.hidden = true;
 }, true);
 
-// 1. Le clic droit sur une ligne : XOSHUI ouvre le menu et émet xo:menu.
+/* 1. Le clic droit sur une ligne : XOSHUI ouvre le menu et émet xo:menu.
+
+   `detail.item` est exigé, et c'est ce qui garde le geste unique. Le menu est
+   partagé par les deux contenants qui le revendiquent — le flux et le Newsdesk
+   (voir `Ecran::rendre()`) — et XOSHUI câble un écouteur de clic par contenant :
+   un seul choix émet donc `xo:menu` deux fois, une fois depuis celui qui tient
+   la ligne visée, une fois depuis l'autre, à vide. Sans ce filtre, le second
+   tir se rabattait sur `selection()` — la même ligne — et la commande partait
+   en double : deux marquages, deux lignes de journal, deux interrogations du
+   modèle pour un clic.
+
+   Un menu **contextuel** a un contexte par définition : sans cible désignée, il
+   n'y a pas de choix à jouer. Le repli sur `selection()` reste juste pour les
+   portes qui n'ont pas d'élément à donner — la palette et le champ. */
 document.addEventListener('xo:menu', (e) => {
+  if (!e.detail.item) return;
   commander(e.detail.action, e.detail.item, 'menu contextuel');
 });
 
@@ -1275,28 +1289,70 @@ if (direct.antenne) {
 
 /* Les onglets dont le contenu vient du serveur. `inspecte` n'y est pas : il ne
    se recharge pas tout seul, il montre la dernière ligne inspectée. */
-/* Un onglet, une clé de réponse, un conteneur. Les trois marquages seulement :
-   Inspecté, la veille et les outils sont fixes, ils ne s'ouvrent pas. */
+/* Un onglet, une clé de réponse, un conteneur.
+
+   Deux, et non plus quatre : suivi, traité et écarté sont un geste à trois
+   issues, réunis sous OSINT (voir `Ecran::newsdesk()`). Trois onglets pour un
+   même sujet débordaient sur une seconde ligne, en permanence, dans la colonne
+   la plus étroite de l'écran. */
 const ONGLETS = {
   veille: 'desk-veille',
-  suivis: 'desk-suivis',
-  traites: 'desk-traites',
-  ecartes: 'desk-ecartes',
+  osint: 'desk-osint',
 };
 
-document.querySelector('[data-xo-tabs]')?.addEventListener('click', async (e) => {
-  const onglet = e.target.closest('[data-rafraichir]');
-  if (!onglet) return;
+/** L'onglet actuellement ouvert, tel que XOSHUI le marque. */
+function ongletOuvert() {
+  return document.querySelector('.xo-tabs__tab[aria-selected="true"]')?.dataset.rafraichir ?? '';
+}
 
-  const quoi = onglet.dataset.rafraichir;
-
+/**
+ * Refaire le contenu d'un onglet.
+ *
+ * Une seule règle décide de ce que montre `desk-veille`, et elle est ici : tant
+ * qu'il y a des mots dans le champ, c'est la recherche qui le remplit ; sinon
+ * c'est le flux. Écrite en deux endroits — le champ d'un côté, l'onglet de
+ * l'autre — elle se contredisait : changer d'onglet écrasait le résultat de la
+ * recherche **sans vider le champ**, et la requête restait affichée au-dessus
+ * d'une liste qui ne lui correspondait plus.
+ */
+async function rafraichirDesk(quoi) {
   if (!ONGLETS[quoi]) return;
+
+  const q = champVeille?.value.trim() ?? '';
+
+  if (quoi === 'veille' && q !== '') {
+    const url = new URLSearchParams({ type: 'veille', q });
+    const data = await fetch(`api/apercu.php?${url}`).then((r) => r.json()).catch(() => null);
+    if (data?.ok) remplir('desk-veille', data.html);
+
+    return;
+  }
 
   const data = await fetch('api/fils.php').then((r) => r.json()).catch(() => null);
   if (data?.ok) {
     remplir(ONGLETS[quoi], data[quoi]);
     majComptes(data.statuts);
   }
+}
+
+document.querySelector('[data-xo-tabs]')?.addEventListener('click', async (e) => {
+  const onglet = e.target.closest('[data-rafraichir]');
+  if (!onglet) return;
+
+  const quoi = onglet.dataset.rafraichir;
+  if (!ONGLETS[quoi]) return;
+
+  /* La recherche ne porte que sur la veille — `api/apercu.php` cherche des
+     dépêches, les trois autres onglets montrent ce qu'on a marqué. Partir vers
+     l'un d'eux vide donc le champ : le laisser plein annoncerait un filtre qui
+     ne s'applique plus à ce qu'on regarde.
+
+     Revenir sur Veille ne le vide pas, et c'est ce qui permet au champ de s'y
+     ramener lui-même : quand on tape depuis un autre onglet, il clique celui-ci
+     et sa requête survit au passage. */
+  if (quoi !== 'veille' && champVeille) champVeille.value = '';
+
+  await rafraichirDesk(quoi);
 });
 
 /** Les comptes des marquages, tenus à jour après chaque geste. */
@@ -1484,11 +1540,22 @@ let minuteurVeille = null;
 champVeille?.addEventListener('input', () => {
   clearTimeout(minuteurVeille);
   // Une frappe ne doit pas déclencher une requête par caractère.
-  minuteurVeille = setTimeout(async () => {
-    const q = champVeille.value.trim();
-    const url = new URLSearchParams({ type: 'veille', apercu: '1', ...(q !== '' ? { q } : {}) });
-    const data = await fetch(`api/apercu.php?${url}`).then((r) => r.json()).catch(() => null);
-    if (data?.ok) remplir('desk-veille', data.html);
+  minuteurVeille = setTimeout(() => {
+    /* Le champ est posé **au-dessus** des onglets, et se présente donc comme
+       commandant la liste qu'on regarde. Il n'écrivait pourtant que dans
+       `desk-veille` : taper depuis Suivis remplissait un panneau caché, et
+       l'écran ne bougeait pas — une frappe sans effet visible, qu'on répète.
+
+       Il tient maintenant sa promesse en ramenant la vue à ce qu'il sait
+       faire. Chercher, c'est chercher dans la veille ; le dire en ouvrant
+       l'onglet vaut mieux que de chercher dans le vide. */
+    if (ongletOuvert() !== 'veille') {
+      document.querySelector('.xo-tabs__tab[data-rafraichir="veille"]')?.click();
+
+      return;
+    }
+
+    rafraichirDesk('veille');
   }, 300);
 });
 

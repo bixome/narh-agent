@@ -259,6 +259,33 @@ final class Util
         return date('d/m H:i', $ts);
     }
 
+    /**
+     * « 11 min », « 4 h », « 2 j » — un **intervalle**, non une distance à
+     * maintenant.
+     *
+     * `age()` répond à « quand ? » et `intervalle()` à « combien de temps ? ».
+     * Les deux formulent pareil parce qu'ils parlent de la même échelle, et
+     * c'est voulu : un desk qui dirait « 11 min » pour l'âge et « 660 s » pour
+     * la propagation obligerait à convertir de tête entre deux colonnes
+     * voisines. Ce qui se lit ensemble s'écrit pareil.
+     */
+    public static function intervalle(int $secondes): string
+    {
+        $secondes = max(0, $secondes);
+
+        if ($secondes < 60) {
+            return 'moins d’une minute';
+        }
+        if ($secondes < 3600) {
+            return (int) round($secondes / 60) . ' min';
+        }
+        if ($secondes < 86400) {
+            return (int) floor($secondes / 3600) . ' h';
+        }
+
+        return (int) floor($secondes / 86400) . ' j';
+    }
+
     /** Durée courte pour un compteur : 41ms, 1.2s. */
     public static function duree(int $ms): string
     {

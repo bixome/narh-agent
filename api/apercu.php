@@ -58,10 +58,17 @@ try {
     }
 
     /* Mot à mot dès qu'on cherche, comme l'outil et comme la tuile : trois
-       façons de chercher pour une même question, c'en serait deux de trop. */
+       façons de chercher pour une même question, c'en serait deux de trop.
+
+       `Ecran::DESK_LIGNES` et non douze en dur : c'est la troisième route à
+       bâtir la liste de l'onglet Veille, après `Ecran::contexte()` et
+       `api/fils.php`. Trois nombres écrits séparément, et vider le champ de
+       recherche ne rendait pas la liste qu'on avait avant de taper. */
     $html = $q !== ''
-        ? Vue::lignesDepeches($base->chercherParMots($q, 12))
-        : Vue::lignesEvenements($base->arbre([], 12));
+        ? Vue::lignesDepeches($base->chercherParMots($q, Ecran::DESK_LIGNES))
+        : Vue::lignesEvenements(
+            $base->arbre(['classement' => 'consistance', 'description' => true, 'traitement' => true], Ecran::DESK_LIGNES),
+        );
 
     echo json_encode(['ok' => true, 'html' => $html], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
 } catch (Throwable $e) {

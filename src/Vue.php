@@ -137,7 +137,9 @@ final class Vue
 
         $fade = self::fraicheur($p->quand);
         $classeIcone = 'xo-list__icon xo-' . $ton;
-        $classeTitre = $p->poids >= Piece::FORT ? ' class="xo-bold"' : '';
+        // Composée avant l'attribut : coupée en deux dans un `class="…"`, le
+        // linter n'y verrait qu'un nom tronqué (même raison qu'en tête de tuile).
+        $classeTitre = 'xo-list__titre' . ($p->poids >= Piece::FORT ? ' xo-bold' : '');
 
         return '<li class="' . $classes . '" role="option" aria-selected="false"'
             . $data . ($style !== '' ? ' style="' . $style . '"' : '') . ($p->cache ? ' hidden' : '') . '>'
@@ -164,12 +166,27 @@ final class Vue
                     . e(Util::tronquer($p->acteur, 13)) . '</span>'
                 : '')
 
-            // data-titre : le navigateur remet le gras quand une reprise fait
-            // monter le niveau. Repérer ce span par son rang le condamnerait à
-            // bouger au premier ajout dans la ligne.
-            . '<span data-titre' . $classeTitre . '>' . e($p->titre) . '</span>'
+            /* data-titre : le navigateur remet le gras quand une reprise fait
+               monter le niveau. Repérer ce span par son rang le condamnerait à
+               bouger au premier ajout dans la ligne.
+
+               `xo-list__titre` s'ajoute sans rien changer en ligne simple — la
+               règle du framework ne lui donne que ce que ses voisins ont déjà.
+               Elle existe pour la carte, où c'est lui seul qui doit prendre la
+               largeur, et une feuille de style ne peut pas deviner lequel des
+               enfants est le titre. */
+            . '<span class="' . $classeTitre . '" data-titre>' . e($p->titre) . '</span>'
 
             . ($p->meta !== '' ? '<span class="xo-list__meta">' . e($p->meta) . '</span>' : '')
+
+            /* La description, quand la pièce en porte une. Absente partout
+               ailleurs : un tour de conversation ou une ligne de journal n'a
+               rien à décrire, et c'est la pièce qui le décide, pas un mode
+               passé par l'appelant. */
+            . implode('', array_map(
+                static fn (string $d): string => '<span class="xo-list__detail">' . e($d) . '</span>',
+                $p->details,
+            ))
             . '</li>';
     }
 
@@ -251,11 +268,13 @@ final class Vue
             $pieces[] = $p;
         }
 
-        // Pas de data-xo-menu ici : le menu contextuel ne doit avoir qu'un seul
-        // propriétaire. XOSHUI câble un clic sur #menu-narh par liste qui le
-        // revendique — en donner un second déclenche deux commandes pour un
-        // seul clic, chacune avec sa propre cible. Le fil seul le porte ; les
-        // alertes restent sélectionnables (l'inspecteur suit), sans clic droit.
+        /* Aucune liste ne déclare `data-xo-menu` — ni celle-ci, ni les autres.
+           Le menu contextuel est monté sur deux contenants fixes, `#flux` et la
+           colonne du Newsdesk (voir `Ecran::rendre()`), parce que XOSHUI câble
+           un écouteur par liste qui le revendique et qu'une liste reposée en
+           ajoute un de plus. Les alertes vivent dans l'en-tête, donc hors des
+           deux : elles restent sélectionnables — l'inspecteur suit — sans clic
+           droit, comme avant. */
         return '<ul class="xo-list" data-xo-list role="listbox"'
             . ' aria-label="Alertes">' . self::lignes($pieces) . '</ul>';
     }
@@ -267,14 +286,42 @@ final class Vue
      * mettrait son état vide et son plafond de six heures alors que le panneau
      * les dit déjà.
      *
+     * `$total` dit combien il y en a **en tout**, quand la liste est tronquée.
+     * C'est la règle déjà écrite pour la tuile Mémoire, à l'autre bout du même
+     * défaut : là-bas le compte annonçait la page et l'on croyait avoir tout
+     * vu ; ici l'onglet annonçait le total — « Suivis 70 » — et n'en ouvrait
+     * que douze, sans rien pour le dire. Un écart qui se creuse tout seul :
+     * mesuré à 58 puis 70 dans la même session, pour une liste restée à 12.
+     *
+     * Zéro — la valeur par défaut — vaut « ne compte pas » : un flux n'a pas de
+     * total, et « 40 sur 21 151 » ne dirait rien de ce qu'on regarde.
+     *
      * @param list<array<string, mixed>> $groupes
+     * @param int                        $total   0 si la notion n'a pas de sens
      */
-    public static function lignesEvenements(array $groupes): string
+    public static function lignesEvenements(array $groupes, int $total = 0): string
     {
         $pieces = array_map(static fn (array $g): Piece => Piece::evenement($g), $groupes);
+        $montres = count($pieces);
 
-        return '<ul class="xo-list" data-xo-list data-xo-menu="#menu-narh" role="listbox"'
-            . ' aria-label="Événements">' . self::lignes($pieces) . '</ul>';
+        /* En cartes dès qu'il y a quelque chose à décrire, en ligne simple
+           sinon. La forme suit donc le contenu au lieu d'être un réglage : une
+           liste sans description n'a aucune raison de prendre deux fois la
+           hauteur, et une liste qui en porte une n'a aucune chance de la faire
+           tenir sur une ligne de 396 px. */
+        /* **N'importe laquelle**, et non la première : la colonne du desk fait
+           passer les alertes devant (`Ecran::alertesPuisVeille()`), et tester
+           `$pieces[0]` faisait dépendre la forme de toute la liste du fait
+           qu'une alerte ouvre ou non — la liste retombait en ligne simple les
+           jours où il y en avait une. Composée avant l'attribut : voir `ligne()`. */
+        $decrite = array_filter($pieces, static fn (Piece $p): bool => $p->details !== []) !== [];
+        $classes = 'xo-list' . ($decrite ? ' xo-list--carte' : '');
+
+        return '<ul class="' . $classes . '" data-xo-list role="listbox"'
+            . ' aria-label="Événements">' . self::lignes($pieces) . '</ul>'
+            . ($total > $montres
+                ? '<p class="xo-muted">' . e($montres . ' sur ' . self::nombre($total)) . '</p>'
+                : '');
     }
 
     /**
@@ -294,7 +341,7 @@ final class Vue
 
         $pieces = array_map(static fn (array $a): Piece => Piece::depeche($a), $depeches);
 
-        return '<ul class="xo-list" data-xo-list data-xo-menu="#menu-narh" role="listbox"'
+        return '<ul class="xo-list" data-xo-list role="listbox"'
             . ' aria-label="Dépêches">' . self::lignes($pieces) . '</ul>';
     }
 
@@ -552,7 +599,7 @@ final class Vue
             Tuile::VEILLE => isset($contenu['depeches'])
                 ? ($contenu['depeches'] === []
                     ? self::vide('silence', 'Aucune dépêche ne correspond à « ' . $contenu['q'] . ' ».')
-                    : '<ul class="xo-list" data-xo-list data-xo-menu="#menu-narh" role="listbox"'
+                    : '<ul class="xo-list" data-xo-list role="listbox"'
                         . ' aria-label="Résultats">'
                         . self::lignes(array_map(
                             static fn (array $a): Piece => Piece::depeche($a),
@@ -560,7 +607,7 @@ final class Vue
                         )) . '</ul>')
                 : (($contenu['evenements'] ?? []) === []
                     ? self::vide('silence', 'Aucun événement ne correspond.')
-                    : '<ul class="xo-list xo-list--tree" data-xo-list data-xo-menu="#menu-narh" role="listbox"'
+                    : '<ul class="xo-list xo-list--tree" data-xo-list role="listbox"'
                         . ' aria-label="Veille">' . self::arbre($contenu['evenements']) . '</ul>'),
 
             Tuile::DEPECHE => self::inspecteur($contenu['article'] ?? null, $contenu['fratrie'] ?? []),
@@ -730,7 +777,7 @@ final class Vue
            troisième état, *retenu*. Il se rend donc par `ligne()` comme tout le
            reste : lui donner un gabarit à lui obligerait l'œil à réapprendre à
            lire en passant du corpus à la veille. */
-        return '<ul class="xo-list" data-xo-list data-xo-menu="#menu-narh" role="listbox"'
+        return '<ul class="xo-list" data-xo-list role="listbox"'
             . ' aria-label="Passages">'
             . self::lignes(array_map(
                 static fn (array $p): Piece => Piece::passage($p),
@@ -862,7 +909,7 @@ final class Vue
 
         $lignes = '';
         if (($seg['pieces'] ?? []) !== []) {
-            $lignes = '<ul class="xo-list" data-xo-list data-xo-menu="#menu-narh" role="listbox"'
+            $lignes = '<ul class="xo-list" data-xo-list role="listbox"'
                 . ' aria-label="Sujets du segment">' . self::lignes($seg['pieces']) . '</ul>';
         }
 
@@ -927,7 +974,7 @@ final class Vue
 
         return $html
             . '<div class="xo-rule xo-rule--start">Couvert à l\'antenne</div>'
-            . '<ul class="xo-list" data-xo-list data-xo-menu="#menu-narh" role="listbox"'
+            . '<ul class="xo-list" data-xo-list role="listbox"'
             . ' aria-label="Sujets couverts">' . self::lignes($pieces) . '</ul>';
     }
 
