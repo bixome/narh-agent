@@ -70,7 +70,10 @@ try {
     repondre([
         'ok'    => true,
         'fil'   => $fil,
-        'tours' => Vue::tours($fil > 0 ? Memoire::messages($fil) : []),
+        // Les deux moitiés : le dialogue va dans la colonne de l'agent, la
+        // chronologie au desk. Voir `Vue::tours()`.
+        'tours'    => Vue::tours($fil > 0 ? Memoire::messages($fil) : [], Vue::CHRONOLOGIE),
+        'dialogue' => Vue::tours($fil > 0 ? Memoire::messages($fil) : [], Vue::DIALOGUE),
     ]);
 } catch (Throwable $e) {
     repondre(['ok' => false, 'erreur' => $e->getMessage()], 500);

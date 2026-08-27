@@ -88,7 +88,10 @@ try {
 
     repondre([
         'ok'     => true,
-        'tours'  => Vue::tours(Memoire::messages($fil)),
+        // Les deux moitiés : le dialogue va dans la colonne de l'agent, la
+        // chronologie au desk. Voir `Vue::tours()`.
+        'tours'    => Vue::tours(Memoire::messages($fil), Vue::CHRONOLOGIE),
+        'dialogue' => Vue::tours(Memoire::messages($fil), Vue::DIALOGUE),
         'outils' => Vue::outils(Memoire::outils($fil, 20)),
         'compte' => $etat['compte'],
         'echecs' => $etat['echecs'],

@@ -412,7 +412,7 @@ async function commander(action, item = null, porte = 'inconnue', argument = '')
         if (!data.ok) throw new Error(data.erreur || 'note refusée');
 
         const suite = await appelerFils();
-        if (suite?.tours !== undefined) poserTours(suite.tours);
+        if (suite?.tours !== undefined) poserTours(suite.tours, suite.dialogue);
 
         notifier('success', 'Note de quart versée au fil',
           `${data.bilan.segments} segments, ${data.bilan.sujets} sujets. L'antenne continue.`, 8000);
@@ -464,7 +464,7 @@ async function commander(action, item = null, porte = 'inconnue', argument = '')
       occupe('fil neuf…');
       try {
         const data = await appelerFils('neuf');
-        if (data?.tours !== undefined) poserTours(data.tours);
+        if (data?.tours !== undefined) poserTours(data.tours, data.dialogue);
         notifier('info', 'Fil neuf', 'Le précédent reste ouvrable par /memoire.', 4000);
       } finally {
         enVol.delete('fils');
@@ -484,7 +484,7 @@ async function commander(action, item = null, porte = 'inconnue', argument = '')
       occupe('oubli…');
       try {
         const data = await appelerFils('oublier', id);
-        if (data?.tours !== undefined) poserTours(data.tours);
+        if (data?.tours !== undefined) poserTours(data.tours, data.dialogue);
       } finally {
         enVol.delete('fils');
         occupe(null);
@@ -660,7 +660,7 @@ async function poserTuile(type, params = {}) {
     const data = await reponse.json();
     if (!data.ok) throw new Error(data.erreur || 'tuile refusée');
 
-    poserTours(data.tours);
+    poserTours(data.tours, data.dialogue);
   } catch (erreur) {
     notifier('danger', 'Tuile impossible', String(erreur.message || erreur), 5000);
   } finally {
@@ -676,7 +676,19 @@ async function poserTuile(type, params = {}) {
  * l'antenne semblerait s'être interrompue. On les détache, on repose les tours
  * rendus par le serveur, puis on les remet en tête dans leur ordre.
  */
-function poserTours(html) {
+function poserTours(html, dialogue) {
+  /* Le dialogue d'abord, et séparément : c'est lui qu'on attend après avoir
+     tapé. Il vit dans la colonne de l'agent — on parle à quelqu'un, la réponse
+     arrive là où l'on a parlé — tandis que les tuiles et les notes de quart
+     restent au desk, où l'on travaille. Le serveur rend les deux moitiés
+     déjà triées : le navigateur n'a pas à connaître les rôles (règle 2). */
+  if (dialogue !== undefined && parole) {
+    parole.innerHTML = dialogue;
+    mount(parole);
+    const flux = document.getElementById('agent-flux');
+    if (flux) flux.scrollTop = 0;
+  }
+
   if (!liste) return;
 
   const segments = [...liste.querySelectorAll('[data-segment]')];
@@ -732,6 +744,12 @@ function inserer(el) {
  *   ce qu'on vient de corriger.
  */
 function defiler(force = false) {
+  /* La colonne de l'agent d'abord : ce qu'on provoque en tapant s'y écrit, et
+     c'est là qu'on regarde. Le desk garde son propre défilement — un segment
+     d'antenne qui arrive ne doit pas remonter la conversation. */
+  const parlant = document.getElementById('agent-flux');
+  if (parlant && (force || parlant.scrollTop < 40)) parlant.scrollTop = 0;
+
   const flux = document.getElementById('flux');
   if (flux && (force || flux.scrollTop < 40)) flux.scrollTop = 0;
 }
@@ -781,7 +799,7 @@ document.addEventListener('xo:select', async (e) => {
   if (item?.dataset.nature !== 'fil') return;
 
   const data = await appelerFils('ouvrir', e.detail.value);
-  if (data?.tours !== undefined) poserTours(data.tours);
+  if (data?.tours !== undefined) poserTours(data.tours, data.dialogue);
 });
 
 /* --- Marquage de desk ----------------------------------------------------- */
@@ -878,7 +896,11 @@ const PHASES = {
  */
 function ouvrirAttente() {
   const gabarit = document.getElementById('gabarit-attente');
-  if (!gabarit || !liste) return null;
+  /* Dans la colonne de l'agent, et non dans le desk : c'est là qu'on vient de
+     taper, et c'est là que la réponse doit se former. Depuis que le fil a
+     rejoint le desk, l'attente s'ouvrait à gauche pendant qu'on regardait à
+     droite — les jetons s'écrivaient hors du champ de vision. */
+  if (!gabarit || !parole) return null;
 
   const noeud = gabarit.content.cloneNode(true);
   const item = noeud.querySelector('[data-attente]');
@@ -886,10 +908,10 @@ function ouvrirAttente() {
   item.dataset.quand = Math.floor(Date.now() / 1000);
   item.querySelector('[data-heure]').textContent = new Date().toLocaleTimeString('fr-FR', { hour12: false });
 
-  liste.prepend(noeud);
+  parole.prepend(noeud);
 
   // Le nœud cloné est détaché après insertion : on retrouve l'élément réel.
-  return liste.querySelector('[data-attente]');
+  return parole.querySelector('[data-attente]');
 }
 
 /** Dire où en est la réponse, sans quitter la ligne où elle s'écrira. */
@@ -993,7 +1015,7 @@ async function envoyer(message) {
        rechargement coupait l'antenne le temps de tout refaire, et perdait le
        défilement. Les segments déjà à l'écran survivent (voir `poserTours`). */
     const data = await appelerFils();
-    if (data?.tours !== undefined) poserTours(data.tours);
+    if (data?.tours !== undefined) poserTours(data.tours, data.dialogue);
   }
 }
 
@@ -1144,15 +1166,19 @@ async function basculerAntenne(ouvrir) {
       texte('etat-sondage', 'en écoute');
       // La note de quart vient d'entrer dans le fil : on la montre.
       const data2 = await appelerFils();
-      if (data2?.tours !== undefined) poserTours(data2.tours);
+      if (data2?.tours !== undefined) poserTours(data2.tours, data2.dialogue);
     }
   } catch (erreur) {
     notifier('danger', 'Bascule impossible', String(erreur.message || erreur), 6000);
   }
 }
 
-/* La même liste que la conversation : un seul flux, une seule chronologie. */
+/* Une seule chronologie (règle 7), lue à deux endroits : `liste` porte ce qui
+   est matière de travail — tuiles, notes de quart, segments d'antenne — dans
+   le desk, et `parole` porte le dialogue dans la colonne de l'agent. Le
+   partage se décide côté serveur (`Vue::tours()`), pas ici. */
 const liste = document.getElementById('flux-liste');
+const parole = document.getElementById('agent-liste');
 
 async function segment() {
   if (!antenneParle() || !liste) return;
@@ -1727,7 +1753,7 @@ async function lancerOutil(nom, valeur) {
 
     // `poserTours` a déjà refait les tuiles Outils du fil : elles montrent
     // l'appel qu'on vient de lancer sans qu'on ait à les viser.
-    poserTours(data.tours);
+    poserTours(data.tours, data.dialogue);
     majOutils({ compte: data.compte, echecs: data.echecs, enCours: 0 });
   } catch (erreur) {
     notifier('danger', 'Outil impossible', String(erreur.message || erreur), 5000);

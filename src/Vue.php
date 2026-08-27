@@ -894,10 +894,39 @@ final class Vue
      *
      * @param list<array<string, mixed>> $tours
      */
-    public static function tours(array $tours): string
+    /** Les deux moitiés d'une même chronologie, et où chacune se lit. */
+    public const DIALOGUE     = 'dialogue';
+    public const CHRONOLOGIE  = 'chronologie';
+
+    /**
+     * Les tours, filtrés par ce qu'ils sont.
+     *
+     * La chronologie reste **une** (règle 7) : elle est simplement lue en deux
+     * endroits, chacun montrant ce qui le concerne.
+     *
+     * - `dialogue` — ce qu'on demande et ce que NARH répond. Sa place est dans
+     *   la colonne de l'agent, avec le champ : on parle à quelqu'un, et la
+     *   réponse doit arriver là où l'on a parlé. Elle atterrissait dans le desk
+     *   depuis que le fil y a déménagé — on tapait à droite, NARH répondait à
+     *   gauche.
+     * - `chronologie` — les tuiles convoquées, les notes de quart, ce que la
+     *   veille verse. C'est de la matière de travail, et sa place est le desk.
+     *
+     * Sans filtre, tout : `api/fils.php` s'en sert encore pour le fil complet.
+     */
+    public static function tours(array $tours, string $filtre = ''): string
     {
+        $dialogue = ['user', 'assistant'];
+
         $html = '';
         foreach (array_reverse($tours) as $t) {
+            $estDialogue = in_array((string) ($t['role'] ?? ''), $dialogue, true);
+            if ($filtre === self::DIALOGUE && !$estDialogue) {
+                continue;
+            }
+            if ($filtre === self::CHRONOLOGIE && $estDialogue) {
+                continue;
+            }
             $html .= self::tour($t);
         }
 

@@ -595,7 +595,14 @@ final class Ecran
                Le moniteur descend avec : mémoire, jetons, corpus et contexte
                mesurent **l'agent**, pas la collecte. Il ouvrait la colonne de
                travail où il n'avait rien à mesurer. -->
-          <div class="xo-scroll" style="flex: 1; min-height: 0; padding-right: 1ch">
+          <!-- Le dialogue, et lui seul : ce qu'on demande, ce que NARH répond.
+               Les tuiles et les notes de quart restent au desk — c'est de la
+               matière de travail, pas une parole. La chronologie n'est pas
+               coupée pour autant (règle 7) : elle est lue en deux endroits,
+               chacun montrant ce qui le concerne. -->
+          <div class="xo-scroll" id="agent-flux" style="flex: 1; min-height: 0; padding-right: 1ch">
+            <ul class="xo-timeline" id="agent-liste"><?= Vue::tours($tours, Vue::DIALOGUE) ?></ul>
+
             <?php if ($tours === []): ?>
             <!-- L'accueil : ce qu'on peut faire, sous le champ qui le fera. Il
                  disparaît dès qu'une première chose arrive, segment compris. -->
@@ -1095,7 +1102,8 @@ final class Ecran
             . '<section id="onglet-fil" role="tabpanel" class="xo-tabpanel xo-scroll"'
             . ' style="flex: 1; min-height: 0">'
             . '<div id="flux" style="min-height: 0">'
-            . '<ul class="xo-timeline" id="flux-liste">' . Vue::tours($tours) . '</ul>'
+            . '<ul class="xo-timeline" id="flux-liste">'
+            . Vue::tours($tours, Vue::CHRONOLOGIE) . '</ul>'
             . '</div>'
             . '</section>'
 

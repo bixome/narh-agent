@@ -138,7 +138,19 @@ try {
         'statuts'  => $statuts + [
             'marques' => (int) ($statuts['suivi'] + $statuts['traite'] + $statuts['ecarte']),
         ],
-        'tours'    => Vue::tours($courant > 0 ? Memoire::messages($courant) : []),
+        /* Les deux moitiés de la même chronologie, rendues séparément parce
+           qu'elles se lisent à deux endroits : le dialogue dans la colonne de
+           l'agent, le reste au desk. Une seule liste rendue deux fois aurait
+           demandé au navigateur de trier, donc de connaître les rôles — c'est
+           au serveur de le savoir (règle 2). */
+        'tours'    => Vue::tours(
+            $courant > 0 ? Memoire::messages($courant) : [],
+            Vue::CHRONOLOGIE,
+        ),
+        'dialogue' => Vue::tours(
+            $courant > 0 ? Memoire::messages($courant) : [],
+            Vue::DIALOGUE,
+        ),
         /* Le moniteur du compte : un tour de plus, des jetons de plus. Rendus
            ici comme tout le reste — le navigateur remplace un bloc déjà écrit,
            il n'en compose pas (règle 2). */
