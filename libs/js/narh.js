@@ -621,23 +621,23 @@ document.addEventListener('xo:select', (e) => {
      fils, eux, se rouvrent — ils n'ont pas de détail à montrer. */
   const nature = choisie?.dataset.nature;
   if (nature === 'depeche' || nature === 'evenement') {
-    montrerInspecte(choisie.dataset.value);
+    /* Choisir une ligne **plonge** dans son événement au lieu d'ouvrir une
+       zone au-dessus de la liste. C'est le même geste qu'avant et le même
+       contenu ; ce qui change est qu'il ne coûte plus de hauteur à la liste —
+       mesuré, l'ancienne zone en prenait 219 px sur 826 dès le premier clic.
 
-    /* La zone d'inspection s'ouvre ici, sur un choix réel, et non dans
+       Seulement depuis la liste du desk : une ligne choisie dans une tuile du
+       fil ou dans un segment d'antenne ne doit pas détourner le poste de
+       travail vers un sujet qu'on n'y regardait pas. */
+    if (choisie.closest('#desk-liste')) {
+      plonger(choisie.dataset.value, 1);
+    }
+
+    /* La plongée se déclenche ici, sur un choix réel, et non dans
        `majGestes()` sur l'état de la sélection : XOSHUI marque déjà une option
        comme choisie au montage de ses listes, si bien qu'au chargement une
-       ligne est « sélectionnée » sans que personne l'ait désignée. La zone
-       serait alors ouverte d'entrée, ce qui est précisément ce qu'on voulait
-       éviter en la sortant du Newsdesk — elle pousserait la conversation vers
-       le bas pour montrer une ligne qu'on n'a pas demandée.
-
-       Elle ne se referme pas sur une **désélection** — ce serait un saut du
-       champ sous le curseur à chaque parcours de liste. Elle se referme sur
-       une demande explicite, par la croix de son en-tête : garder un objet
-       traité à l'écran coûte de la hauteur en permanence, le saut ne coûte
-       qu'une fois, et là c'est l'utilisateur qui l'a voulu. */
-    const zone = document.getElementById('inspection');
-    if (zone) zone.hidden = false;
+       ligne est « sélectionnée » sans que personne l'ait désignée — le desk
+       s'ouvrirait alors d'entrée sur un sujet qu'on n'a pas demandé. */
   }
 });
 
@@ -1300,6 +1300,13 @@ const ONGLETS = {
   osint: 'desk-osint',
 };
 
+/* Le Fil n'est pas dans cette table, et c'est délibéré : il est **vivant**.
+   `poserTours()` le tient à jour à chaque réponse, tuile ou outil, et le direct
+   y insère ses segments à leur place. Le recharger au clic d'onglet le
+   réécrirait depuis le serveur — donc sans les segments, qui n'existent que
+   dans cette page — et l'antenne semblerait s'être interrompue. Les autres
+   onglets, eux, sont des photos qu'il faut redemander. */
+
 /** L'onglet actuellement ouvert, tel que XOSHUI le marque. */
 function ongletOuvert() {
   return document.querySelector('.xo-tabs__tab[aria-selected="true"]')?.dataset.rafraichir ?? '';
@@ -1332,6 +1339,8 @@ async function rafraichirDesk(quoi) {
   if (data?.ok) {
     remplir(ONGLETS[quoi], data[quoi]);
     majComptes(data.statuts);
+    // Les lignes sont posées : on peut aller demander ce qu'on en dit ailleurs.
+    croiserOsint(document.getElementById(ONGLETS[quoi]) ?? document);
   }
 }
 
@@ -1355,6 +1364,98 @@ document.querySelector('[data-xo-tabs]')?.addEventListener('click', async (e) =>
   await rafraichirDesk(quoi);
 });
 
+/* --- La passe de croisement OSINT ----------------------------------------
+   Après l'affichage, jamais pendant. Le desk pose ses lignes, puis on demande
+   au serveur ce que des registres extérieurs en disent, et le verdict rejoint
+   la carte qui est déjà à l'écran.
+
+   C'est la règle de la lecture hors réponse, et pour le direct elle est
+   vitale : un segment est composé en 30 à 45 ms parce qu'il n'attend rien, et
+   la contrainte fondatrice est de ne jamais laisser plus de dix-sept secondes
+   de blanc. Un appel réseau de deux secondes ne rentre pas dans ce budget.
+
+   `api/liens.php` décrivait déjà ce motif pour la vérification des liens et
+   n'a jamais eu d'appelant — un motif sans branchement reste une intention. */
+let osintEnCours = false;
+
+/**
+ * Croiser les sujets à l'écran, **un par un**, en montrant où l'on en est.
+ *
+ * Un seul aller-retour aurait suffi à obtenir les verdicts, et n'aurait rien
+ * montré : l'écran serait resté identique pendant six secondes, puis tout
+ * serait apparu d'un coup. On ne saurait pas si le desk travaille, s'il a fini,
+ * ou s'il est en panne — et ces trois états se ressemblent quand rien ne bouge.
+ *
+ * La boucle est donc côté navigateur, et c'est aussi ce qui évite une seconde
+ * route qui streame : `api/chat.php` est la seule, et elle doit le rester. Le
+ * cadencement appartient à celui qui affiche.
+ *
+ * La règle n'est pas assouplie pour autant — **rien n'attend le croisement**.
+ * Les lignes sont déjà lisibles, complètes, avant que le premier appel parte ;
+ * ce qui s'affiche pendant, c'est l'état du traitement, pas son résultat.
+ */
+async function croiserOsint(racine = document) {
+  if (osintEnCours) return;
+
+  /* Ce qui est **à l'écran**, et rien d'autre : croiser ce qu'on ne regarde
+     pas ferait payer des requêtes sortantes à des services gratuits pour un
+     verdict que personne ne lira. */
+  const lignes = [...racine.querySelectorAll('[data-groupe]')]
+    .filter((li) => !li.dataset.osintVu && li.querySelector('[data-osint]'))
+    .slice(0, 12);
+  if (lignes.length === 0) return;
+
+  osintEnCours = true;
+  let fait = 0;
+
+  try {
+    for (const li of lignes) {
+      const place = li.querySelector('[data-osint]');
+      /* `textContent` et non du balisage : la passe écrit un état, elle ne
+         dessine pas (règle 2). La place a été rendue par le serveur, vide. */
+      place.hidden = false;
+      place.textContent = '⋯ croisement…';
+      texte('etat-sondage', `croisement ${++fait}/${lignes.length}`);
+
+      let rendu = null;
+      try {
+        const reponse = await fetch('api/osint.php', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ groupes: [Number(li.dataset.groupe)] }),
+        });
+        const data = await reponse.json();
+        if (data?.ok) rendu = data.verdicts?.[li.dataset.groupe] ?? '';
+      } catch {
+        /* Un service injoignable n'est pas une panne du desk : la ligne reste
+           ce qu'elle était, et on le dit sur elle plutôt que dans une
+           notification qui recouvrirait l'écran pour un supplément. */
+        place.textContent = '⋯ croisement injoignable';
+        continue;
+      }
+
+      /* Marquée même sans verdict : la plupart des sujets n'ont rien à
+         vérifier — l'USGS n'a rien à dire d'une garde à vue — et redemander à
+         chaque sondage ce qu'aucun service ne sait dire coûterait une requête
+         par ligne et par cycle. */
+      li.dataset.osintVu = '1';
+
+      if (rendu) {
+        place.remove();
+        li.insertAdjacentHTML('beforeend', rendu);
+      } else {
+        // Le vide se dit une fois, puis s'efface : « rien à croiser » sur
+        // trente-huit lignes sur quarante serait du bruit permanent.
+        place.textContent = '— rien à croiser';
+        setTimeout(() => place.remove(), 1200);
+      }
+    }
+  } finally {
+    texte('etat-sondage', '');
+    osintEnCours = false;
+  }
+}
+
 /** Les comptes des marquages, tenus à jour après chaque geste. */
 function majComptes(statuts) {
   if (!statuts) return;
@@ -1374,38 +1475,140 @@ function majComptes(statuts) {
  * dernière ligne compte, et les réponses arrivées dans le désordre feraient
  * clignoter le détail.
  */
-let inspecteEnCours = null;
+/* --- La pile de niveaux ---------------------------------------------------
+   Le desk plonge au lieu d'empiler. Cliquer une ligne ouvre l'événement, qui
+   **remplace** la liste ; de là on ouvre la source, puis sa vérification. On
+   remonte à Échap, ou par le fil d'Ariane.
 
-/**
- * Refermer l'inspection.
- *
- * `inspecteEnCours` est remis à zéro, sans quoi rechoisir la **même** ligne ne
- * rouvrirait rien : la garde du début de `montrerInspecte` la prendrait pour
- * une demande déjà servie, et la zone resterait fermée sur un clic qui vient
- * pourtant de désigner quelque chose.
- *
- * Les gestes partent avec elle sans qu'on ait à les cacher : ils vivent dans
- * la section. Les masquer en plus ne tenait pas de toute façon — `majGestes()`
- * réécrit leur état à chaque sélection, et remettait l'attribut à zéro.
- */
-function fermerInspecte() {
-  document.getElementById('inspection')?.setAttribute('hidden', '');
-  inspecteEnCours = null;
+   Ce n'est pas un onglet : des onglets sont des pairs — Veille et OSINT le
+   sont — alors qu'ici il s'agit de profondeur. En interface texte, la
+   profondeur est une pile qu'on dépile, avec une trace d'une ligne.
+
+   La pile vit **en mémoire de page**, pas en base : plonger est un geste de
+   consultation, comme faire défiler. L'inscrire ferait du bruit dans une
+   chronologie qui doit rester lisible quand on cherche ce qui s'est passé. */
+const NIVEAUX = ['Veille', "l'événement", 'la source', 'la vérification'];
+let pile = [];
+
+function niveauCourant() {
+  return pile.length;
 }
 
-document.getElementById('desk-inspecte-fermer')?.addEventListener('click', fermerInspecte);
+/** Rendre la barre de chemin et montrer la bonne surface. */
+function majNiveau() {
+  const barre = document.getElementById('desk-barre');
+  const liste = document.getElementById('desk-liste');
+  const zone = document.getElementById('desk-niveau');
+  const trace = document.getElementById('desk-trace');
+  if (!barre || !liste || !zone || !trace) return;
 
-async function montrerInspecte(id) {
-  if (!id || inspecteEnCours === id) return;
-  inspecteEnCours = id;
+  const profond = pile.length > 0;
+  barre.hidden = !profond;
+  liste.hidden = profond;
+  zone.hidden = !profond;
+
+  if (!profond) {
+    zone.innerHTML = '';
+
+    return;
+  }
+
+  /* Le chemin est bâti ici, en texte : c'est le seul endroit de l'écran où le
+     navigateur compose du balisage, et il s'agit d'un état de navigation qui
+     n'existe que dans cette page — le serveur ne le connaît pas et ne peut
+     donc pas le rendre. */
+  trace.replaceChildren();
+  const marches = [{ titre: NIVEAUX[0], rang: 0 }, ...pile.map((p, i) => ({ titre: p.titre, rang: i + 1 }))];
+  for (const m of marches) {
+    const sep = document.createElement('span');
+    sep.className = 'xo-breadcrumb__sep';
+    sep.setAttribute('aria-hidden', 'true');
+    sep.textContent = m.rang === 0 ? '' : '›';
+    trace.append(sep);
+
+    const el = document.createElement(m.rang === marches.length - 1 ? 'span' : 'a');
+    el.textContent = m.titre;
+    if (m.rang === marches.length - 1) {
+      el.setAttribute('aria-current', 'page');
+    } else {
+      el.href = '#';
+      el.addEventListener('click', (e) => { e.preventDefault(); remonterA(m.rang); });
+    }
+    trace.append(el);
+  }
+}
+
+/** Descendre d'un niveau sur une dépêche. */
+async function plonger(id, n = 1) {
+  if (!id) return;
+
+  const zone = document.getElementById('desk-niveau');
+  if (!zone) return;
+
+  // L'attente se dit : un niveau 2 va chercher un article sur le réseau, et
+  // une surface vide pendant deux secondes se lit comme une panne.
+  pile = pile.slice(0, n - 1);
+  pile.push({ id, titre: NIVEAUX[n] ?? 'détail' });
+  majNiveau();
+  zone.textContent = '⋯ ouverture…';
 
   try {
-    const data = await fetch(`api/apercu.php?type=depeche&id=${encodeURIComponent(id)}`)
-      .then((r) => r.json());
-    if (data.ok && inspecteEnCours === id) remplir('desk-inspecte', data.html);
-  } catch {
-    /* L'inspecteur est un confort : son échec ne casse ni la liste ni le flux. */
+    const url = new URLSearchParams({ type: 'niveau', n: String(n), id });
+    const data = await fetch(`api/apercu.php?${url}`).then((r) => r.json());
+    if (!data.ok) throw new Error(data.erreur || 'niveau illisible');
+
+    pile[pile.length - 1].titre = data.titre || NIVEAUX[n];
+    zone.innerHTML = data.html;
+    mount(zone);
+    majNiveau();
+  } catch (erreur) {
+    zone.textContent = '';
+    notifier('danger', 'Niveau illisible', String(erreur.message || erreur), 4000);
+    remonterA(pile.length - 1);
   }
+}
+
+/** Revenir à une profondeur donnée — 0 rend la liste. */
+function remonterA(rang) {
+  pile = pile.slice(0, rang);
+  majNiveau();
+  if (pile.length > 0) {
+    plonger(pile[pile.length - 1].id, pile.length);
+  }
+}
+
+document.getElementById('desk-remonter')?.addEventListener('click', () => remonterA(pile.length - 1));
+
+/* Les descentes gardent **la dépêche du niveau 1**, pas celle du niveau
+   courant : la source et la vérification parlent toutes deux de l'objet qu'on
+   a désigné dans la liste, et non de la vue par laquelle on y est arrivé. */
+document.addEventListener('click', (e) => {
+  const bouton = e.target.closest?.('[data-plonger]');
+  if (!bouton || pile.length === 0) return;
+  plonger(pile[0].id, Number(bouton.dataset.plonger));
+});
+
+/* Échap remonte d'un niveau. XOSHUI ne s'en sert que pour refermer ses
+   modales, et il n'y en a aucune d'ouverte quand on plonge — les deux usages
+   ne peuvent donc pas se croiser. Ce n'est pas un raccourci maison vers une
+   action : remonter est de l'état d'affichage, comme faire défiler. */
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape' || pile.length === 0) return;
+  if (document.querySelector('dialog[open]')) return;
+  e.preventDefault();
+  remonterA(pile.length - 1);
+});
+
+/**
+ * Montrer une dépêche — la porte que gardent les commandes.
+ *
+ * `inspecter` et les autres gestes visent une ligne où qu'elle soit, y compris
+ * dans une tuile du fil : ils plongent donc au niveau 1, comme un clic dans la
+ * liste. La zone « Inspecté » qu'ils remplissaient auparavant n'existe plus —
+ * elle est devenue ce niveau.
+ */
+async function montrerInspecte(id) {
+  await plonger(id, 1);
 }
 
 /* --- L'onglet Outils ------------------------------------------------------
@@ -1665,3 +1868,17 @@ addEventListener('load', () => defiler(true));
 appelerFils();
 sonder();
 setInterval(() => sonder(), periode());
+
+/* Le croisement part **après** que la page soit à l'écran, pas pendant son
+   chargement : c'est tout le principe de la passe, et le déclencher plus tôt
+   reviendrait à faire attendre l'affichage derrière un appel réseau.
+
+   Mais ce fichier est un module, donc différé : `load` a déjà tiré quand il
+   s'exécute, et un écouteur posé ici n'aurait jamais rien reçu — mesuré, 81
+   lignes croisables et zéro croisement. On regarde donc l'état plutôt que
+   d'attendre un événement passé, comme XOSHUI le fait pour son montage. */
+if (document.readyState === 'complete') {
+    croiserOsint();
+} else {
+    addEventListener('load', () => croiserOsint());
+}

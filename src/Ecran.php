@@ -485,65 +485,117 @@ final class Ecran
       </div>
       <?php endif; ?>
 
-      <!-- Deux colonnes : la conversation aux deux tiers, le Newsdesk au
-           tiers. Le poste de travail est **à côté** de ce qu'on lit, plus
-           au-dessus : une bande horizontale volait de la hauteur au flux, alors
-           que la largeur, elle, était perdue — un titre de dépêche fait cent
-           caractères, pas cent cinquante. -->
-      <!-- `grid-auto-rows` : une grille dimensionne sa rangée sur le contenu,
+      <!-- LA BARRE DE L'AGENT — pleine largeur, en tête, au-dessus des deux
+           colonnes.
+
+           Elle était dans la colonne de gauche, donc *dans* la conversation, et
+           l'agent s'en trouvait être un panneau parmi d'autres. Il ne l'est
+           pas : il commande tout l'écran. Une ligne désignée dans le desk, une
+           tuile posée dans le fil, un segment d'antenne — tout lui est
+           adressable, et rien de cela n'appartient à une colonne.
+
+           Le gain n'est pas que d'ordre : les gestes de desk agissaient sur une
+           ligne choisie **dans l'autre colonne**, si bien qu'on désignait à
+           droite et qu'on agissait à gauche. En tête et pleine largeur, la
+           barre surplombe les deux : ce qu'on vient de désigner et ce qu'on
+           peut en faire ne sont plus de part et d'autre de l'écran.
+
+           `id` : « Interroger l'agent dessus » y insère le bandeau sans
+           recharger la page. Sans point d'ancrage nommé, il aurait fallu le
+           deviner par sa position, qui bougerait au premier ajout. -->
+      <!-- Deux colonnes, et l'axe est celui du geste : **ce sur quoi on agit à
+           gauche, ce qu'on lit à droite.**
+
+           C'est l'inverse de l'ordre précédent, où la conversation prenait les
+           deux tiers et le poste de travail le tiers. Le desk ne montre plus
+           des lignes tronquées mais des cartes décrites — origine, propagation,
+           motifs, verdicts — et c'est lui, désormais, qui a besoin de largeur.
+           Mesuré avant la bascule : le titre d'une carte tenait sur 386 px.
+
+           Le prix est réel et assumé : la conversation tombe à un tiers, et
+           c'est elle qui porte de la prose. Une réponse de modèle s'y lira sur
+           une colonne étroite. C'est le sens de la grille — l'informationnel se
+           consulte, l'utile se manipule — et une prose étroite se lit encore,
+           quand un titre coupé au sixième mot ne se lit plus.
+
+           `grid-auto-rows` : une grille dimensionne sa rangée sur le contenu,
            même quand elle a elle-même une hauteur définie. Sans cette ligne, les
-           deux colonnes s'arrêtaient à la hauteur du plus court des deux et
-           laissaient un vide sous le Newsdesk. -->
+           deux colonnes s'arrêtent à la hauteur de la plus courte. -->
       <div class="xo-grid" style="flex: 1; min-height: 0; grid-auto-rows: minmax(0, 1fr)">
 
-        <div class="xo-col-8" style="display: flex; flex-direction: column; min-height: 0">
+        <!-- Le point de montage du menu contextuel pour tout ce que le desk
+             pose : les onglets refont leurs listes à chaque geste, et le menu se
+             dédoublerait à chaque fois. La colonne, elle, ne se repose jamais. -->
+        <div class="xo-col-8" data-xo-menu="#menu-narh"
+             style="display: flex; flex-direction: column; min-height: 0">
 
+          <!-- Le moniteur ouvre la colonne, en haut à gauche : c'est le premier
+               regard de l'écran, et il dit d'un coup d'œil qui l'on est, si
+               l'antenne est ouverte, et ce que la mémoire a retenu. Replié par
+               défaut — un moniteur se consulte, il ne s'occupe pas. -->
           <?= self::utilisateur($c) ?>
 
-          <!-- Inspecté, entre l'utilisateur et le champ : ce qu'on vient de
-               désigner, et ce qu'on peut en faire, juste avant l'endroit où on
-               en parle. Absent tant qu'aucune ligne n'est choisie — il ne prend
-               de la hauteur que quand il a quelque chose à montrer. -->
-          <?= self::inspecte() ?>
+          <!-- « Inspecté » n'est plus une zone. Ce qu'elle montrait est devenu
+               le **niveau 1** du desk : au lieu de s'empiler au-dessus de la
+               liste, le détail la remplace et prend toute la hauteur.
 
-          <!-- Le champ, sous l'utilisateur et **au-dessus** du flux : il ne
-               bouge jamais, et ce qui vient d'arriver apparaît immédiatement
-               dessous. En bas, il obligeait à faire défiler pour parler dès que
-               la conversation dépassait une hauteur d'écran — le geste le plus
-               fréquent était le plus coûteux. -->
-          <!-- `id` : « Interroger l'agent dessus » y insère le bandeau sans
-               recharger la page. Sans point d'ancrage nommé, il aurait fallu le
-               deviner par sa position, qui bougerait au premier ajout. -->
-          <div id="zone-champ" style="flex: none; margin: 16px 0">
-            <?= $bandeau ?>
-            <?= self::champ($ancre, count($c['appels'])) ?>
-          </div>
+               C'était la dernière des quatre zones superposées, et la plus
+               coûteuse — mesuré : 219 px sur 826, qui ramenaient la liste de
+               605 à 386 dès qu'on cliquait une ligne. Un panneau de détail
+               au-dessus d'une liste fait toujours ce marché-là ; une pile ne le
+               fait jamais. -->
 
-          <!-- Un seul flux, quel que soit le régime.
-               Les segments de l'antenne et les tours de conversation s'y mêlent
-               dans l'ordre où ils sont arrivés — c'est la même chronologie, et
-               c'était le sens de la règle 7 depuis le début. -->
-          <!-- `data-xo-menu` est posé **ici**, sur le contenant qui ne bouge
-               jamais, et non sur chaque `<ul>` que `Vue` rend.
+          <?= self::newsdesk($c, $tours) ?>
 
-               XOSHUI câble un écouteur de clic sur le menu partagé **par liste
-               montée**, chacun avec sa propre cible ; un choix dans le menu émet
-               donc autant de fois `xo:menu` qu'il y a de listes vivantes, et
-               `commander()` s'exécute autant de fois. Mesuré : 7 tirs pour un
-               clic au chargement, 15 après cinq minutes d'antenne — un segment
-               de direct pose une liste toutes les 17 s, et elles s'accumulent
-               dans le flux sans jamais en sortir. Après une heure, un clic droit
-               valait ~214 exécutions. Un seul tir portait la bonne ligne, tous
-               les autres se rabattaient sur `selection()`, c'est-à-dire la même
-               ligne : `interroger` interrogeait le modèle deux cents fois.
+        </div>
 
-               Le flux est monté une fois pour toutes et contient tout ce qui
-               s'y pose ensuite — tuiles, segments, sources. Un écouteur, pour
-               toujours. -->
-          <div class="xo-scroll" id="flux" data-xo-menu="#menu-narh"
-               style="flex: 1; min-height: 0; padding-right: 1ch">
-            <ul class="xo-timeline" id="flux-liste"><?= Vue::tours($tours) ?></ul>
+        <aside class="xo-col-4" style="display: flex; flex-direction: column; min-height: 0"
+               aria-label="Agent">
 
+          <!-- Le fil est un panneau, comme le Newsdesk en face : un simple
+               titre sur son filet suffit à le dire, et les deux colonnes se
+               lisent alors comme deux surfaces de même rang plutôt qu'un
+               panneau posé à côté de contenu nu.
+
+               Le moniteur qui l'ouvrait est parti en tête du poste de travail —
+               il mesure l'outil, pas la conversation. Sans lui, le fil
+               commençait par du vide et rien ne le nommait.
+
+               `flex` et `min-height: 0` sur le panneau, `xo-scroll` à
+               l'intérieur : un panneau ne défile jamais lui-même, sinon son
+               titre défilerait avec son contenu. -->
+          <section class="xo-panel xo-panel--pad"
+                   style="display: flex; flex-direction: column; flex: 1; min-height: 0">
+            <h2 class="xo-panel__title">Agent</h2>
+
+            <!-- Le champ **avec** la conversation, pas ailleurs.
+
+                 Il a vécu sous le moniteur, puis en barre pleine largeur, puis
+                 dans la colonne de travail. À chaque fois il était séparé de ce
+                 qu'il produit : on tapait à un endroit, la réponse arrivait à un
+                 autre. L'agent est une seule chose — on lui parle, il répond —
+                 et l'écran le dit enfin d'un bloc.
+
+                 La colonne de gauche y gagne le reste : elle n'a plus à
+                 accueillir une zone de saisie qui ne parle pas d'elle.
+
+                 `id` : « Interroger l'agent dessus » y insère le bandeau sans
+                 recharger la page. Sans point d'ancrage nommé, il aurait fallu
+                 le deviner par sa position, qui bougerait au premier ajout. -->
+            <div id="zone-champ" style="flex: none; margin-bottom: 8px">
+              <?= $bandeau ?>
+              <?= self::champ($ancre, count($c['appels'])) ?>
+            </div>
+
+          <!-- Le fil est parti à gauche, en premier onglet du Newsdesk : c'est
+               la chronologie entière, et Veille comme OSINT n'en sont que des
+               filtres. Ce qui reste ici est l'agent lui-même — on lui parle, il
+               répond, et ses fonctions sont sous la main.
+
+               Le moniteur descend avec : mémoire, jetons, corpus et contexte
+               mesurent **l'agent**, pas la collecte. Il ouvrait la colonne de
+               travail où il n'avait rien à mesurer. -->
+          <div class="xo-scroll" style="flex: 1; min-height: 0; padding-right: 1ch">
             <?php if ($tours === []): ?>
             <!-- L'accueil : ce qu'on peut faire, sous le champ qui le fera. Il
                  disparaît dès qu'une première chose arrive, segment compris. -->
@@ -563,17 +615,8 @@ final class Ecran
             </div>
             <?php endif; ?>
           </div>
+          </section>
 
-        </div>
-
-        <!-- Le second point de montage du menu contextuel, pour la même raison
-             que le flux : les quatre onglets refont leurs listes à chaque geste
-             de desk, et le menu se serait dédoublé à chaque fois. La colonne,
-             elle, ne se repose jamais. -->
-        <aside class="xo-col-4" data-xo-menu="#menu-narh"
-               style="display: flex; flex-direction: column; min-height: 0"
-               aria-label="Newsdesk">
-          <?= self::newsdesk($c) ?>
         </aside>
 
       </div>
@@ -791,12 +834,31 @@ final class Ecran
            Hauteur libre mais contenu fixe : trois lignes et une rangée de
            boutons, rien qui puisse s'allonger — le champ en dessous ne bougera
            donc pas. */
-        return '<section class="xo-panel xo-panel--pad" style="flex: none">'
-            /* Pas d'icône dans un titre de panneau : en mode console, le titre
-               interrompt le filet (`──┤ Titre ├──`), et y glisser un glyphe de
-               plus alourdit une bordure au lieu de nommer une section. Les
-               icônes restent sur les boutons, où elles désignent une action. */
-            . '<h2 class="xo-panel__title">Utilisateur</h2>'
+        /* -- Replié par défaut : c'est un moniteur, pas un panneau --
+           Mesuré dans la colonne utile : 185 px sur 826, soit 22 % de la
+           surface de travail, pour des compteurs qu'on lit une fois en
+           arrivant et plus jamais ensuite. La liste, elle — le seul contenu
+           qu'on parcourt — n'en gardait que 241, et une seule carte y tenait
+           entièrement.
+
+           Un `<details>` et non une suppression : les compteurs restent dans
+           le document même repliés, donc `appelerFils()` continue de remplir
+           `#compteurs` et `#jauge-contexte` sans savoir si quelqu'un regarde.
+           Les retirer aurait demandé de leur trouver une autre porte, et
+           `texte()` aurait écrit dans le vide.
+
+           Le résumé porte ce qui doit rester sous les yeux — qui l'on est, et
+           si l'antenne est ouverte. Un agent qui parle tout seul ne doit jamais
+           pouvoir passer pour un agent qui attend une question, replié ou non. */
+        return '<details class="xo-accordion xo-panel xo-panel--pad" style="flex: none">'
+            . '<summary>'
+            . '<span class="xo-bold">' . e((string) narh_reglage('utilisateur', 'vous')) . '</span>'
+            . '<span class="xo-spacer"></span>'
+            . (Direct::enAntenne()
+                ? '<span class="xo-badge xo-badge--danger">EN DIRECT</span>'
+                : '<span class="xo-muted">moniteur</span>')
+            . '</summary>'
+            . '<div class="xo-accordion__body">'
             /* `Corpus::etat()` compte quatre tables, dont une FTS5 : mesuré à
                4,2 ms une fois la base ouverte — elle l'est déjà quand la tuile
                se rend. Les 111 ms d'un premier appel à froid sont l'ouverture,
@@ -821,7 +883,8 @@ final class Ecran
             . '<button class="xo-btn xo-btn--ghost" type="button" data-xo-open="#reglages">'
             . Icone::rendre('reglages') . ' Réglages</button>'
             . '</div>'
-            . '</section>';
+            . '</div>'
+            . '</details>';
     }
 
     /**
@@ -850,7 +913,7 @@ final class Ecran
      * reste — une porte de plus vers les mêmes commandes, jamais un raccourci
      * (règle 5).
      */
-    private static function inspecte(): string
+    private static function gestes(): string
     {
         /* Les gestes qui visent une ligne, dans l'ordre où un desk les
            enchaîne : on regarde, on décide, on ouvre, on interroge. */
@@ -869,47 +932,7 @@ final class Ecran
                 . Icone::rendre($icone) . ' ' . e($court) . '</button>';
         }
 
-        /* `max-height` en clair, pas `--xo-max-h` : le token n'est lu que par
-           `xo-panel__body`, `xo-log`, `xo-editor`, `xo-dialog__body` et
-           `xo-table-wrap`. Posé sur `xo-scroll`, qui n'est qu'un
-           `overflow: auto`, il ne bornerait rien — le détail d'une dépêche avec
-           son résumé et sa fratrie pousserait le champ hors de l'écran.
-
-           Plus bas qu'au Newsdesk (16vh contre 20) : la colonne fait ici les
-           deux tiers de la largeur, le même texte y tient en moins de lignes,
-           et ce qui est gagné revient à la conversation. */
-        return '<section class="xo-panel xo-panel--pad" id="inspection"'
-            . ' style="flex: none; margin-top: 8px" aria-label="Inspecté" hidden>'
-            /* Fermable, contrairement à ce que cette classe soutenait jusqu'ici.
-               L'argument était qu'une zone escamotable ferait sauter le champ
-               sous le curseur — c'est vrai, et c'est le prix retenu : à
-               l'usage, garder un objet inspecté à l'écran longtemps après
-               l'avoir traité coûte plus de hauteur, en permanence, que le saut
-               ne coûte une fois.
-
-               Le bouton ne passe pas par `commander()` : la règle 5 vise les
-               **actions** — celles qu'on journalise, qu'on rejoue, qu'un seuil
-               peut déclencher. Refermer un panneau est de l'état d'affichage,
-               comme faire défiler ; en faire une commande nommée mettrait du
-               bruit dans la chronologie unique. */
-            . '<div class="xo-row">'
-            . '<div class="xo-rule xo-rule--start" style="flex: 1">Inspecté</div>'
-            . '<button class="xo-btn xo-btn--ghost" type="button" id="desk-inspecte-fermer"'
-            . ' data-xo-tip="Fermer l\'inspection" aria-label="Fermer l\'inspection">×</button>'
-            . '</div>'
-            . '<div class="xo-scroll" id="desk-inspecte" style="max-height: 16vh">'
-            . Vue::inspecteur(null) . '</div>'
-            /* `xo-row` et non `xo-btn-group` : le groupe est un composant
-               *segmenté*, XOSHUI colle ses boutons exprès (`margin-left: -1px`,
-               et `0` en console) pour qu'ils se lisent comme un seul contrôle à
-               choix unique. Ce n'en est pas un — ce sont huit gestes
-               indépendants, et les coller demandait de viser. `xo-row` porte le
-               `gap` du framework, sans une ligne de style à écrire. */
-            . '<div class="xo-row" id="desk-gestes" role="group"'
-            . ' aria-label="Gestes de desk" style="margin-top: 8px" hidden>'
-            . $gestes
-            . '</div>'
-            . '</section>';
+        return $gestes;
     }
 
     /**
@@ -927,7 +950,7 @@ final class Ecran
      *
      * @param array<string, mixed> $c contexte rendu par contexte()
      */
-    private static function newsdesk(array $c): string
+    private static function newsdesk(array $c, array $tours): string
     {
         $antenne = Direct::enAntenne();
         $alertes = $c['alertes'];
@@ -940,6 +963,64 @@ final class Ecran
         return '<section class="xo-panel xo-panel--pad"'
             . ' style="display: flex; flex-direction: column; flex: 1; min-height: 0">'
             . '<h2 class="xo-panel__title">Newsdesk</h2>'
+
+            /* -- La barre de niveau : le chemin, et ce qu'on peut faire ici --
+               Elle n'existe qu'en plongée. Au niveau 0 on est *dans* la liste,
+               et un fil d'Ariane qui dirait « Veille » tout seul occuperait une
+               ligne pour ne rien apprendre.
+
+               Les gestes y vivent désormais, et non plus dans une zone
+               « Inspecté » posée au-dessus de la liste : ils visent la ligne
+               courante, à quelque profondeur qu'on soit, et suivre la cible
+               plutôt que la vue est ce qui leur évite d'être recopiés à chaque
+               niveau. `majGestes()` les retrouve par `#desk-gestes`, où qu'ils
+               soient dans le document. */
+            /* `nowrap` : la barre porte le chemin, sept gestes et deux
+               descentes. Laissée libre, elle passait sur deux lignes et
+               reprenait au contenu la hauteur que la pile venait de lui rendre.
+               C'est le chemin qui cède — il se tronque, et le fil d'Ariane
+               reste lisible par sa fin, qui dit où l'on est. Les gestes, eux,
+               ne se tronquent pas : un verbe coupé ne se clique pas. */
+            . '<div class="xo-row" id="desk-barre" style="flex: none; flex-wrap: nowrap" hidden>'
+            . '<nav class="xo-breadcrumb" id="desk-trace" aria-label="Chemin"'
+            . ' style="flex: 1 1 0; min-width: 0; border: 0; background: none;'
+            . ' flex-wrap: nowrap; overflow: hidden; text-overflow: ellipsis; white-space: nowrap"></nav>'
+            . '<div class="xo-row" id="desk-gestes" role="group" aria-label="Gestes de desk" hidden>'
+            . self::gestes()
+            . '</div>'
+            /* Les descentes : où l'on peut aller depuis ici. Elles vivent dans
+               la barre et non dans le contenu du niveau, pour la même raison
+               que les gestes — le contenu change à chaque profondeur, la barre
+               non, et recopier les portes dans chaque vue les aurait fait
+               diverger au premier ajout.
+
+               Elles ne passent pas par `commander()` : descendre d'un niveau
+               est de l'état d'affichage, comme faire défiler. La règle 5 vise
+               les actions qu'on journalise et qu'un seuil peut déclencher —
+               « regarder de plus près » n'en est pas une. */
+            . '<button class="xo-btn xo-btn--ghost" type="button" data-plonger="2"'
+            . ' data-xo-tip="Lire la source ici, sans quitter le desk">'
+            . Icone::rendre('lire') . ' source</button>'
+            . '<button class="xo-btn xo-btn--ghost" type="button" data-plonger="3"'
+            . ' data-xo-tip="Ce que des registres extérieurs en disent">'
+            . Icone::rendre('inspecter') . ' vérifier</button>'
+            . '<button class="xo-btn xo-btn--ghost" type="button" id="desk-remonter"'
+            . ' data-xo-tip="Remonter d\'un niveau" aria-label="Remonter d\'un niveau">✕</button>'
+            . '</div>'
+
+            /* Le contenu d'un niveau **remplace** la liste, il ne s'empile pas
+               dessus. C'est tout l'intérêt : mesuré avant, quatre zones
+               superposées dans la colonne utile ne laissaient que 29 % de la
+               hauteur à la liste, et une seule carte y tenait entièrement. Une
+               surface à la fois, et chacune a les 700 px. */
+            . '<div id="desk-niveau" class="xo-scroll" style="flex: 1; min-height: 0" hidden></div>'
+
+            /* Le niveau 0 d'un bloc — recherche, onglets et listes. Ils se
+               cachent ensemble quand on plonge : séparés, il aurait fallu
+               masquer chaque morceau un par un, et le champ de recherche,
+               laissé dehors, retombait au pied du panneau sous la surface du
+               niveau. Chercher n'a de sens que dans une liste. */
+            . '<div id="desk-liste" style="display: flex; flex-direction: column; flex: 1; min-height: 0">'
 
             /* -- La recherche, au-dessus des onglets et non dedans --
                Elle porte sur la veille, mais la garder dans un seul onglet
@@ -980,9 +1061,22 @@ final class Ecran
                L'ordre reste une progression : ce qui arrive d'abord, les
                décisions ensuite. Veille est l'onglet ouvert — on regarde un
                desk pour voir ce qui tombe, pas pour relire ce qu'on a traité. */
-            . '<div class="xo-tabs" data-xo-tabs role="tablist"'
-            . ' style="flex-wrap: wrap; overflow-x: visible; flex: none">'
-            . '<button class="xo-tabs__tab" role="tab" aria-selected="true" aria-controls="onglet-veille"'
+            /* Plus de `flex-wrap` : deux onglets tiennent sur une ligne à toute
+               largeur utile, et le repli n'était là que pour absorber les
+               quatre d'avant dans une colonne de 289 px. Le laisser aurait
+               gardé une réserve de hauteur pour un débordement qui ne peut plus
+               se produire. */
+            . '<div class="xo-tabs" data-xo-tabs role="tablist" style="flex: none">'
+            /* **Fil en premier, et ouvert.** C'est la chronologie entière — les
+               tours, les tuiles, les segments d'antenne, dans l'ordre où ils
+               sont arrivés (règle 7) — et Veille comme OSINT n'en sont que des
+               filtres : ce qui vient de la collecte, ce dont on s'est occupé.
+               Le mettre à côté d'eux plutôt qu'à part est ce qui rend les trois
+               lisibles ensemble ; il vivait dans l'autre colonne, ce qui en
+               faisait une seconde chronologie en face de la première. */
+            . '<button class="xo-tabs__tab" role="tab" aria-selected="true" aria-controls="onglet-fil"'
+            . ' data-rafraichir="fil">Fil</button>'
+            . '<button class="xo-tabs__tab" role="tab" aria-selected="false" aria-controls="onglet-veille"'
             . ' data-rafraichir="veille">Veille</button>'
             . '<button class="xo-tabs__tab" role="tab" aria-selected="false" aria-controls="onglet-osint"'
             . ' data-rafraichir="osint">OSINT <span data-compte="marques">'
@@ -993,8 +1087,20 @@ final class Ecran
             /* Une alerte **est** un événement de la veille, simplement passé
                au-dessus du seuil : les deux dans une seule liste, le grave
                d'abord, et l'on lit une colonne du haut vers le bas. */
-            . '<section id="onglet-veille" role="tabpanel" class="xo-tabpanel xo-scroll"'
+            /* Le flux continu : tours, tuiles et segments d'antenne mêlés dans
+               l'ordre d'arrivée. Pas de `data-xo-menu` ici — la colonne le
+               porte déjà, et un second point de montage à l'intérieur du
+               premier ferait jouer chaque commande deux fois. C'est le défaut
+               mesuré en début de session, et il se rouvre exactement ainsi. */
+            . '<section id="onglet-fil" role="tabpanel" class="xo-tabpanel xo-scroll"'
             . ' style="flex: 1; min-height: 0">'
+            . '<div id="flux" style="min-height: 0">'
+            . '<ul class="xo-timeline" id="flux-liste">' . Vue::tours($tours) . '</ul>'
+            . '</div>'
+            . '</section>'
+
+            . '<section id="onglet-veille" role="tabpanel" class="xo-tabpanel xo-scroll"'
+            . ' style="flex: 1; min-height: 0" hidden>'
             /* Pas de total pour la veille : c'est un flux, pas un ensemble. Les
                21 151 événements de la base ne sont pas « le reste » de ce qu'on
                regarde ici, et « 40 sur 21 151 » ne dirait rien. Les trois
@@ -1013,6 +1119,7 @@ final class Ecran
                 (int) ($statuts['suivi'] + $statuts['traite'] + $statuts['ecarte']),
             ) . '</div>'
             . '</section>'
+            . '</div>'
 
             /* Les outils ont quitté ce pied de colonne pour la conversation.
                Ils disaient « aucun outil appelé **dans ce fil** » depuis la

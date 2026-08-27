@@ -1089,6 +1089,22 @@ final class Base
     }
 
     /**
+     * Un groupe, par son identifiant.
+     *
+     * Pour ce qui vise **un** sujet nommé — la passe de croisement OSINT — au
+     * lieu de parcourir une liste pour l'y retrouver.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function groupe(int $id): ?array
+    {
+        $st = $this->pdo->prepare('SELECT * FROM groupe WHERE id = :id');
+        $st->execute(['id' => $id]);
+
+        return $st->fetch() ?: null;
+    }
+
+    /**
      * D'où part un sujet, et à quelle vitesse il se propage.
      *
      * Les deux questions qu'un desk pose d'abord — *qui l'a sorti* et *qui a

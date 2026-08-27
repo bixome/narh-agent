@@ -100,6 +100,46 @@ return [
        `ia_marge` sert dès maintenant : la base s'en sert pour repérer les
        scores qui frôlent un seuil, indépendamment de tout modèle. */
 
+    /* ---- OSINT : le croisement avec des sources extérieures ---------------
+       Des hôtes, et **rien que des hôtes** : `Lecture::service()` n'accepte
+       que des paramètres, jamais une adresse venue d'une réponse. Ni le
+       modèle ni une dépêche ne peuvent donc désigner la machine interrogée.
+
+       Aucun compte, aucune clé — c'est le critère de sélection, pas un
+       hasard : une clé dans le dépôt serait un secret versionné, et une clé
+       hors du dépôt un réglage de plus à transmettre pour que le projet
+       tourne ailleurs.
+
+       Ce que ces services font, et surtout ce qu'ils ne font pas : ils
+       **s'affichent à côté** de la collecte et n'entrent ni dans `score` ni
+       dans `niveau` (règle 4). La collecte ne pense pas, et elle ne pense pas
+       davantage avec l'aide d'un tiers.
+
+       `actif` à false laisse la déclaration lisible sans que rien ne parte :
+       supprimer la ligne ferait oublier que le service existe. */
+    'osint' => [
+        // Le seul qui **vérifie** au lieu de corroborer : il ne dit pas
+        // « d'autres en parlent » mais « le séisme a bien eu lieu, à cette
+        // heure, à cet endroit, à cette magnitude ».
+        'usgs' => [
+            'actif' => true,
+            'url'   => 'https://earthquake.usgs.gov/fdsnws/event/1/query',
+        ],
+        /* La couverture mondiale, pour prolonger la reprise au-delà des
+           rédactions françaises. Treize maisons françaises et zéro couverture
+           étrangère, ou trois françaises et deux cents mondiales, ne sont pas
+           le même événement — et le desk les affiche aujourd'hui pareil. */
+        'gdelt' => [
+            'actif' => false,
+            'url'   => 'https://api.gdeltproject.org/api/v2/doc/doc',
+        ],
+    ],
+
+    // Combien de secondes une passe OSINT s'autorise, tous services confondus.
+    // Elle tourne **après** l'affichage : ce budget ne retarde jamais un
+    // segment de direct ni une réponse.
+    'osint_budget' => 6,
+
     'ollama' => [
         'url'         => 'http://127.0.0.1:11434',
         /* Le défaut d'une installation neuve, et rien de plus : dès qu'on a

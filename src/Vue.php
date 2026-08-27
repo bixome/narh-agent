@@ -187,6 +187,17 @@ final class Vue
                 static fn (string $d): string => '<span class="xo-list__detail">' . e($d) . '</span>',
                 $p->details,
             ))
+
+            /* La place du croisement, posée **vide** par le serveur.
+               C'est ce qui permet à la passe d'écrire son état — « usgs… » —
+               sans dessiner de balisage (règle 2) : elle n'écrit que du texte
+               dans un élément déjà rendu, exactement comme le flux de jetons.
+               Le verdict final, lui, revient rendu par `Vue::verdicts()`.
+
+               Sans cette place réservée, l'état n'aurait nulle part où aller et
+               le traitement redeviendrait invisible : on ne verrait que le
+               résultat, ou rien, sans jamais savoir si quelque chose travaille. */
+            . ($p->details !== [] ? '<span class="xo-list__detail xo-fade" data-osint hidden></span>' : '')
             . '</li>';
     }
 
@@ -322,6 +333,40 @@ final class Vue
             . ($total > $montres
                 ? '<p class="xo-muted">' . e($montres . ' sur ' . self::nombre($total)) . '</p>'
                 : '');
+    }
+
+    /**
+     * Ce que des sources extérieures disent d'un sujet.
+     *
+     * Rendu ici et non côté navigateur (règle 2), et posé sur la carte comme
+     * une ligne de détail de plus : un verdict est de la **description**, au
+     * même titre que l'origine et la reprise, et rien ne justifierait qu'il ait
+     * sa propre grammaire.
+     *
+     * Le ton distingue les deux régimes que `Osint` sépare : un écart entre ce
+     * qu'annonce un titre et ce que dit un registre est la seule chose ici qui
+     * mérite d'alerter — c'est même le cas pour lequel tout ceci existe.
+     * « Corroboré » reste neutre : d'autres en parlent n'est pas une preuve.
+     *
+     * @param list<array{service: string, verdict: string, dit: string, quand: int}> $liste
+     */
+    public static function verdicts(array $liste): string
+    {
+        $html = '';
+        foreach ($liste as $v) {
+            $ton = match ($v['verdict']) {
+                Osint::ECART    => ' xo-warning',
+                Osint::CONCORDE => ' xo-success',
+                default         => '',
+            };
+            // Composée avant l'attribut : voir `ligne()`.
+            $classes = 'xo-list__detail' . $ton;
+            $html .= '<span class="' . $classes . '">'
+                . e('✓ ' . $v['dit'])
+                . '</span>';
+        }
+
+        return $html;
     }
 
     /**
@@ -1111,8 +1156,20 @@ final class Vue
      */
     public static function inspecteur(?array $a, array $fratrie = []): string
     {
+        /* Une ligne, pas un état vide illustré.
+
+           `vide()` réserve une hauteur minimale et centre un glyphe — c'est
+           juste pour un panneau qu'on regarde, faux pour celui-ci. Depuis que
+           la colonne utile porte le moniteur, l'inspecteur, le champ **et** le
+           desk, chaque zone qui réserve de la hauteur en prend au seul contenu
+           qu'on parcourt vraiment : mesuré, l'état vide occupait 150 px pour
+           dire qu'il n'avait rien à dire.
+
+           Le cas est de surcroît transitoire — la zone n'est montrée qu'une
+           fois une ligne choisie, et ce texte ne se voit qu'entre le clic et la
+           réponse de l'inspecteur. */
         if ($a === null) {
-            return self::vide('rien', "Choisir une ligne : l'inspecteur suit.");
+            return '<p class="xo-muted">Choisir une ligne : l’inspecteur suit.</p>';
         }
 
         $niveau = (int) $a['niveau'];
