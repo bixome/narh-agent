@@ -223,6 +223,22 @@ final class Lecture
             '/en vous inscrivant [àa] (nos|notre|la|ce)|susceptible d\'[êe]tre personnalis/iu',
             '/vous pouvez vous d[ée]sinscrire|d[ée]sinscri(re|ption) [àa] tout moment|lien de d[ée]sinscription/iu',
             '/g[ée]rer vos consentements|retirer votre consentement|politique de protection des donn[ée]es/iu',
+
+            /* Deux encarts relevés dans le corpus et que rien ne visait : la
+               promotion du référencement (« privilégier l'affichage des
+               articles de franceinfo dans les résultats de recherche Google »)
+               et la confirmation de désabonnement, qui arrive **dans** le
+               corps de page et non dans un pied. Formules figées, comme les
+               autres : c'est ce qui permet de les viser sans amputer un
+               article qui parlerait de Google ou d'une newsletter. */
+            '/dans les r[ée]sultats de recherche google/iu',
+            '/vous [êe]tes sur le point de vous d[ée]sabonner/iu',
+
+            /* Les avis d'interface et de réutilisation, relevés en tête de
+               deux quotidiens : ils occupent la place du premier paragraphe,
+               donc celle qu'on lit. */
+            '/pour sauvegarder un article vous devez [êe]tre connect[ée]/iu',
+            '/partenaire autoris[ée]|authorized partner/iu',
         ];
 
         foreach ($motifs as $motif) {
@@ -254,8 +270,50 @@ final class Lecture
         libxml_clear_errors();
         $xpath = new DOMXPath($doc);
 
+        /* -- D'abord *où* est l'article, ensuite ce qu'il dit --
+
+           `//p` prenait toute la page. Le filtre de formules ne pouvait rien
+           contre ça : une accroche de recirculation est un vrai paragraphe de
+           vrai français, elle ne ressemble à aucun encart. Mesuré sur un
+           article de franceinfo : neuf paragraphes rendus, dont un seul de
+           l'article — les huit autres étaient des titres de la colonne de
+           droite (« La start-up française Pasqal fait son entrée à la Bourse
+           de New York », « Hôtels, entreprises locales… ») et deux encarts.
+           Sur l'ensemble du corpus, 213 articles sur 361 étaient illisibles.
+
+           `<article>` **n'est pas** un signal de zone, et c'est le résultat le
+           plus contre-intuitif de la mesure : la page relevée en porte sept,
+           imbriqués — un pour la page, un par vignette de recirculation. Le
+           plus gros les contient tous, si bien que « prendre l'article » et
+           « prendre la page » donnent le même texte. On ne garde donc que les
+           deux déclarations sans ambiguïté, et l'on se replie sur la page. */
+        $zone = null;
+        foreach (['//*[@itemprop="articleBody"]', '//main'] as $candidat) {
+            $trouve = $xpath->query($candidat)->item(0);
+            if ($trouve !== null) {
+                $zone = $trouve;
+                break;
+            }
+        }
+
+        /* Ce qui se retire **où qu'il soit**, y compris au milieu d'une zone
+           d'article — et c'est là que la sélection se joue vraiment :
+
+           - `ancestor::a` : un paragraphe de corps n'est jamais dans un lien.
+             Les cinq accroches parasites relevées y étaient toutes, chacune
+             enveloppée dans la carte cliquable qui la porte. Une règle de
+             structure, qui ne dépend du vocabulaire de personne ;
+           - `newsletter` et `carousel` : deux mots de classe qu'aucun rédacteur
+             n'emploie pour du corps de texte. On vise la classe et non la
+             phrase parce qu'une formule promotionnelle se réécrit à chaque
+             refonte, alors que le rôle du bloc, lui, reste écrit dedans. */
+        $hors = '[not(ancestor::nav) and not(ancestor::aside) and not(ancestor::footer)'
+            . ' and not(ancestor::header) and not(ancestor::form) and not(ancestor::a)'
+            . ' and not(ancestor-or-self::*[contains(@class, "newsletter")'
+            . ' or contains(@class, "carousel")])]';
+
         $paragraphes = [];
-        foreach ($xpath->query('//p') as $p) {
+        foreach ($xpath->query('.//p' . $hors, $zone ?? $doc->documentElement) as $p) {
             $texte = trim(preg_replace('/\s+/u', ' ', $p->textContent) ?? '');
 
             if (mb_strlen($texte) < 80 || self::estHabillage($texte) || in_array($texte, $paragraphes, true)) {

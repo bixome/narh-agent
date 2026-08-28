@@ -65,13 +65,39 @@ final class Direct
      * Un panel, pas une phrase : la même formule répétée toutes les dix-sept
      * secondes s'entend au bout de trois tours. Le choix se fait sur le rang du
      * segment, pas au hasard — un direct rejoué doit se dérouler à l'identique.
+     *
+     * **La taille du panel n'est pas une question de goût, elle se calcule.**
+     * Le rang est global : un panel de quatre revient donc tous les quatre
+     * segments, soit toutes les 44 secondes à la cadence réelle. Relevé sur
+     * huit segments consécutifs : « Suite de ce sujet » deux fois, « Rappel »
+     * deux fois, « Pour y revenir » deux fois — la rengaine que le paragraphe
+     * ci-dessus interdit, produite par le mécanisme censé l'éviter.
+     *
+     * `relance` est le plus fourni parce que c'est lui qui tient les nuits
+     * calmes : quand rien de neuf n'arrive, tous les segments sont des
+     * relances, et le panel devient la seule chose qui change. `alerte` reste
+     * court pour la raison inverse — trois alertes de suite ne se produisent
+     * pas, et une alerte ne cherche pas à varier son entrée en matière.
      */
     private const LANCEMENTS = [
         'alerte'  => ['Information NARH', 'Alerte info', 'Dernière minute'],
-        'depeche' => ['On y vient', 'À signaler', "L'info qui tombe", 'Autre sujet'],
-        'bref'    => ['En bref', 'Le tour des titres', 'Ailleurs dans l’actualité', 'On résume'],
-        'point'   => ['Le point', 'Où en est-on', 'Ce qui domine', 'Récapitulons'],
-        'relance' => ['On y revient', 'Suite de ce sujet', 'Pour y revenir', 'Rappel'],
+        'depeche' => [
+            'On y vient', 'À signaler', "L'info qui tombe", 'Autre sujet',
+            'Ça vient d’arriver', 'Nouveau au fil', 'On enchaîne',
+        ],
+        'bref'    => [
+            'En bref', 'Le tour des titres', 'Ailleurs dans l’actualité',
+            'On résume', 'En quelques lignes', 'Le reste du fil',
+        ],
+        'point'   => [
+            'Le point', 'Où en est-on', 'Ce qui domine', 'Récapitulons',
+            'L’état du desk', 'Vue d’ensemble',
+        ],
+        'relance' => [
+            'On y revient', 'Suite de ce sujet', 'Pour y revenir', 'Rappel',
+            'Le fil de ce sujet', 'Où en était-on', 'Ce qu’on sait déjà',
+            'Retour sur', 'Toujours d’actualité', 'Pour mémoire',
+        ],
     ];
 
     private static bool $prete = false;
