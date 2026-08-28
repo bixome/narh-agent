@@ -130,7 +130,7 @@ return [
            étrangère, ou trois françaises et deux cents mondiales, ne sont pas
            le même événement — et le desk les affiche aujourd'hui pareil. */
         'gdelt' => [
-            'actif' => false,
+            'actif' => true,
             'url'   => 'https://api.gdeltproject.org/api/v2/doc/doc',
         ],
     ],

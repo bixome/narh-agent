@@ -44,6 +44,11 @@ final class Osint
     public const ABSENT   = 'absent';
     public const CORROBORE = 'corrobore';
 
+    /* Le plafond que GDELT applique de toute façon à une page de résultats.
+       L'écrire ici sert à dire « 75+ » plutôt que « 75 » : un compte plafonné
+       présenté comme exact serait faux, et toujours faux du même côté. */
+    private const GDELT_MAX = 75;
+
     private static bool $prete = false;
 
     private static function db(): PDO
@@ -159,16 +164,190 @@ final class Osint
 
         $services = narh_reglage('osint');
 
+        $quand = (int) ($g['dernier'] ?? time());
+        $rendu = null;
+
         if (!empty($services['usgs']['actif']) && !self::deja($id, 'usgs')) {
-            $v = self::usgs($titre, (int) ($g['dernier'] ?? time()), (string) $services['usgs']['url']);
+            $v = self::usgs($titre, $quand, (string) $services['usgs']['url']);
             if ($v !== null) {
                 self::retenir($id, 'usgs', $v['verdict'], $v['dit']);
-
-                return ['service' => 'usgs'] + $v;
+                $rendu = ['service' => 'usgs'] + $v;
             }
         }
 
-        return null;
+        /* Les deux services se suivent au lieu de s'exclure : l'un vérifie le
+           fait, l'autre mesure sa diffusion, et un séisme mérite les deux. Le
+           premier verdict rendu est celui qu'on retourne — l'appelant n'en fait
+           qu'un compteur, et l'affichage relit `connus()`, qui les a tous. */
+        if (!empty($services['gdelt']['actif']) && !self::deja($id, 'gdelt')) {
+            $v = self::gdelt($titre, $quand, (string) $services['gdelt']['url']);
+            if ($v !== null) {
+                self::retenir($id, 'gdelt', $v['verdict'], $v['dit']);
+                $rendu ??= ['service' => 'gdelt'] + $v;
+            }
+        }
+
+        return $rendu;
+    }
+
+    /**
+     * GDELT : combien de monde en parle, et depuis combien de pays.
+     *
+     * Ce service **corrobore**, il ne vérifie pas — la distinction est celle du
+     * haut de ce fichier, et elle décide de tout ce qui suit. NARH compte les
+     * rédactions françaises qui reprennent un sujet ; treize maisons françaises
+     * et zéro couverture étrangère, ou trois françaises et deux cents mondiales,
+     * ne sont pas le même événement, et le desk les affichait pareil.
+     *
+     * **La requête est en noms propres, et c'est une contrainte du service, pas
+     * un choix.** Mesuré : GDELT indexe la traduction anglaise de ce qu'il
+     * moissonne, si bien qu'un titre français ne lui dit rien — `crue Népal
+     * morts` rend zéro article, `inondations` en rend un, et
+     * `sourcelang:french inondations` zéro. Les noms propres, eux, traversent :
+     * `Nepal` rend 75 articles dans 14 pays, `Gaza` 75 dans 15, `Caen` 75 dans
+     * 14 dont la Grèce et le Portugal. Traduire le reste demanderait le modèle,
+     * qui n'a rien à faire ici (règle 4) et encore moins pendant une passe.
+     *
+     * **Deux noms propres au minimum, et joints par un ET.** C'est la leçon de
+     * `usgs()` juste en dessous, payée une fois déjà : un verdict affiché à côté
+     * d'un titre est lu comme portant sur lui. Interroger `Gaza` seul rendrait
+     * la couverture mondiale de Gaza en général et l'afficherait sous « une
+     * quarantaine de Gazaouis évacués » — une fausse vérifiabilité, exactement
+     * ce que cette classe existe pour combattre. L'intersection de deux noms,
+     * dans la fenêtre du sujet, porte sur l'événement.
+     *
+     * **On ne dit rien quand on ne trouve rien.** Zéro article ne se distingue
+     * pas d'une requête qui n'a pas su nommer le sujet : les deux causes
+     * produisent le même silence, et une seule des deux serait une information.
+     *
+     * @return array{verdict: string, dit: string}|null
+     */
+    private static function gdelt(string $titre, int $quand, string $url): ?array
+    {
+        $noms = self::nomsPropres($titre);
+        if (count($noms) < 2) {
+            return null;
+        }
+
+        $noms = array_slice($noms, 0, 2);
+        $requete = implode(' ', $noms);
+
+        /* La fenêtre du sujet, pas les trois derniers jours : ce qu'on mesure
+           est la diffusion **de cet événement**, et le même couple de noms
+           propres reparaît sur d'autres faits d'un mois à l'autre. */
+        $json = Lecture::service($url, [
+            'query'         => $requete,
+            'mode'          => 'artlist',
+            'format'        => 'json',
+            'maxrecords'    => self::GDELT_MAX,
+            'sort'          => 'hybridrel',
+            'startdatetime' => gmdate('YmdHis', $quand - 86400),
+            'enddatetime'   => gmdate('YmdHis', $quand + 86400),
+        ], 5);
+
+        if ($json === null) {
+            return null;
+        }
+
+        /* Une requête que GDELT refuse revient en texte, pas en JSON — trop
+           courte, opérateur inconnu. `json_decode` rend null, et ce n'est pas
+           une panne : c'est un titre dont on n'a pas su faire une question. */
+        $data = json_decode($json, true);
+        $articles = is_array($data['articles'] ?? null) ? $data['articles'] : [];
+        if ($articles === []) {
+            return null;
+        }
+
+        $pays = [];
+        foreach ($articles as $a) {
+            $p = trim((string) ($a['sourcecountry'] ?? ''));
+            if ($p !== '') {
+                $pays[$p] = true;
+            }
+        }
+
+        /* Hors France, parce que c'est la seule chose que la reprise ne sait
+           pas déjà dire : les maisons françaises, le desk les compte lui-même. */
+        $etranger = count(array_diff_key($pays, ['France' => true]));
+
+        $compte = count($articles);
+        $dits = $compte >= self::GDELT_MAX ? self::GDELT_MAX . '+' : (string) $compte;
+
+        /* La requête est **dite**, et ce n'est pas un détail d'affichage : sans
+           elle, le lecteur ne peut pas savoir sur quoi porte le chiffre, et un
+           chiffre dont on ignore l'objet se lit comme portant sur le titre
+           entier. Le mot « corrobore » ouvre la ligne pour la même raison — le
+           régime doit se lire avant le nombre. */
+        return [
+            'verdict' => self::CORROBORE,
+            'dit'     => 'GDELT corrobore : ' . $dits . ' article' . ($compte > 1 ? 's' : '')
+                . ', ' . match (true) {
+                    $etranger === 0 => 'aucun pays hors France',
+                    $etranger === 1 => '1 pays hors France',
+                    default         => $etranger . ' pays hors France',
+                }
+                . ' — « ' . $requete . ' », 48 h',
+        ];
+    }
+
+    /**
+     * Les noms propres d'un titre, sans accent — la seule matière qu'un index
+     * anglophone reconnaisse dans une dépêche française.
+     *
+     * Le premier mot est écarté : une phrase commence par une majuscule, et la
+     * prendre pour un nom propre ferait de « Crue » un lieu. Les marqueurs de
+     * rubrique des rédactions le sont aussi — `DIRECT.`, `VIDÉO.`, `RÉCIT` ne
+     * qualifient pas le sujet mais la forme de l'article, et ils traînent en
+     * tête d'un titre sur cinq.
+     *
+     * @return list<string>
+     */
+    private static function nomsPropres(string $titre): array
+    {
+        /* Les mots grammaticaux qui prennent la majuscule en français, et les
+           marqueurs de rubrique. Une capitale n'y suffit pas à faire un nom. */
+        static $creux = [
+            'le', 'la', 'les', 'un', 'une', 'des', 'du', 'de', 'ce', 'cet',
+            'cette', 'ces', 'il', 'elle', 'ils', 'elles', 'on', 'et', 'mais',
+            'car', 'pour', 'sur', 'dans', 'avec', 'sans', 'apres', 'avant',
+            'comment', 'pourquoi', 'quand', 'qui', 'que', 'quoi', 'plus',
+            'moins', 'tout', 'tous', 'deux', 'trois', 'entre', 'chez', 'vers',
+            'selon', 'direct', 'video', 'recit', 'reportage', 'enquete',
+            'portrait', 'analyse', 'decryptage', 'temoignage', 'info', 'exclusif',
+            'edito', 'tribune', 'live', 'suivez', 'revivez',
+        ];
+
+        $mots = preg_split('/[^\p{L}\p{N}\'’-]+/u', $titre, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        $noms = [];
+
+        foreach ($mots as $rang => $mot) {
+            /* L'élision colle le déterminant au nom : « l’Himalaya » est un
+               seul mot pour qui découpe sur la ponctuation, et l'apostrophe le
+               faisait rejeter plus bas. Mesuré sur le desk : trois titres sur
+               quatorze perdaient ainsi leur seul nom propre. */
+            $mot = preg_replace('/^(?:[ldnmtscj]|qu|jusqu|lorsqu|puisqu)[\'’]/iu', '', $mot) ?? $mot;
+
+            if ($rang === 0 || mb_strlen($mot) < 3) {
+                continue;
+            }
+            /* `mb_substr` et non `$mot[0]` : un « É » tient sur deux octets.
+               Et la majuscule se teste par l'existence d'une minuscule
+               différente, sans quoi « 500 » passerait pour un nom propre —
+               un chiffre est égal à lui-même dans les deux casses. */
+            $tete = mb_substr($mot, 0, 1);
+            if (mb_strtolower($tete) === $tete) {
+                continue;
+            }
+
+            $plat = Util::sansAccents($mot);
+            if (in_array($plat, $creux, true) || preg_match('/^[a-z0-9]+$/', $plat) !== 1) {
+                continue;
+            }
+
+            $noms[$plat] = true;
+        }
+
+        return array_keys($noms);
     }
 
     /**
