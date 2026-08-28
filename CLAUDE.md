@@ -123,15 +123,29 @@ regarde. Ici on **tape** — une console d'agent a un champ de saisie au centre.
 
 ### La forme
 
-**Une surface, trois bandes.** NARH n'a pas d'écrans : il a une lecture, la
-conversation. Pas de barre latérale, pas d'onglets, pas de colonnes permanentes.
+**Une surface, deux colonnes, quatre bandes.** NARH n'a pas d'écrans : il a une
+lecture. Pas d'écran de réglages, pas de page de veille, pas de vue « fils ».
+
+La règle d'origine disait « pas de colonnes permanentes ». Elle a cédé, et il
+faut savoir sur quoi : le desk et la conversation se regardent **en même
+temps** — on lit une ligne, on la questionne, on lit la réponse sans quitter la
+ligne. Les faire alterner dans une seule colonne demandait un aller-retour à
+chaque question. Ce qui reste interdit est le reste : un onglet par sujet, un
+panneau par organe, un écran par réglage.
 
 | Bande | Contenu | Bouge ? |
 |---|---|---|
 | **Barre d'état** | Une ligne : l'état des deux organes, l'heure. | Jamais |
-| **En-tête** | Des tuiles **fixes** d'organisation : Veille, Alertes, Fils. On s'y repère. | Jamais |
-| **Conversation** | Le fil des tours : champ, réponses, tuiles. On y travaille. | Défile en elle-même |
+| **Newsdesk** (gauche) | La recherche, trois onglets — Fil, Veille, Marqués — et la plongée qui les remplace. | Défile en lui-même |
+| **Agent** (droite) | Le champ, puis les tours : réponses, outils, tuiles. | Défile en elle-même |
 | **Pied** | `xo-keys`. | Jamais |
+
+Les trois onglets ne sont pas trois écrans : ce sont trois filtres d'**une
+seule** chronologie (règle 7). Fil montre tout dans l'ordre d'arrivée, Veille ce
+qui vient de la collecte, Marqués ce dont on s'est occupé. Un onglet nommé
+d'après un service extérieur — « OSINT » — promettait ce que la Veille livrait :
+un intitulé se règle sur ce que le panneau contient, jamais sur ce qu'on
+aimerait y voir.
 
 - **Le plus récent en tête, et le champ juste sous l'en-tête.** Les deux
   régimes se lisent dans le même sens : ce qui vient d'arriver est toujours
@@ -148,22 +162,25 @@ conversation. Pas de barre latérale, pas d'onglets, pas de colonnes permanentes
 - **Ce qui a disparu n'est pas perdu :** la veille, la mémoire, le journal et
   l'inspecteur sont devenus des **tuiles** (voir plus bas). Un panneau permanent
   occupe l'écran en permanence pour un contenu qu'on regarde par intermittence.
-- **L'inspection est contre le champ, pas dans le Newsdesk.** Le Newsdesk parle
-  de listes ; « Inspecté » parle d'**un** objet, celui qu'on vient de désigner.
-  Le laisser au milieu des listes obligeait l'œil à traverser l'écran pour
-  relier une ligne cliquée à gauche à son détail à droite. Entre l'utilisateur
-  et le champ, il forme une seule bande avec lui : on regarde ce qu'on a
-  désigné, on agit dessus ou on en parle, puis on lit. Les gestes restent
-  **avec** l'objet qu'ils visent. La zone **n'existe qu'une fois une ligne
-  choisie** : permanente, elle volerait de la hauteur pour rien. Elle ne se
-  referme pas sur une **désélection** — ce serait un saut du champ sous le
-  curseur à chaque parcours de liste — mais sur une **demande explicite**, par
-  la croix de son en-tête. Garder un objet déjà traité à l'écran coûte de la
-  hauteur en permanence ; le saut ne coûte qu'une fois, et il est voulu.
-  Son en-tête tient sur **deux lignes** : le niveau et la rédaction qualifient
-  la même chose et partagent leur ligne, le titre a la sienne. Trois lignes
-  avant le premier mot utile, dans une zone bornée à 16vh, ne laissaient plus
-  de place à ce qu'on était venu lire.
+- **Inspecter, c'est plonger — la liste cède la place, elle ne la partage pas.**
+  Le Newsdesk parle de listes ; l'inspection parle d'**un** objet, celui qu'on
+  vient de désigner. Ce fut d'abord une zone posée au-dessus de la liste ; elle
+  lui prenait 219 px sur 826 dès le premier clic, et quatre zones superposées
+  ne laissaient plus que 29 % de la colonne à ce qu'on parcourait. Choisir une
+  ligne **descend** donc d'un niveau (`narh.js`, `plonger()`) : l'événement et
+  sa fratrie, puis la source, puis la vérification. `Échap` ou la croix
+  remontent. On regarde ce qu'on a désigné, on agit dessus ou on en parle, puis
+  on remonte — et les gestes restent **avec** l'objet qu'ils visent.
+  L'en-tête tient sur **deux lignes** : le niveau et la rédaction qualifient la
+  même chose et partagent leur ligne, le titre a la sienne.
+- **Une plongée dit toujours de quel sujet elle parle.** Une ligne d'événement
+  porte le titre du **groupe** ; l'inspecteur montre une **dépêche**, parce
+  qu'un groupe n'a pas de texte. Les deux diffèrent souvent, la source avec
+  eux — on cliquait « Europe 1 » et l'on obtenait « RFI ». La ligne « Sujet · »
+  raccroche les deux, et elle ne paraît que lorsqu'il y a un écart à expliquer.
+  Le compte de reprises, lui, vient de `groupe.sources` et de nulle part
+  ailleurs : compté sur les articles rapportés, il annonçait huit rédactions
+  pour six.
 - **Deux ou trois colonnes dans la conversation.** Une tuile seule prend la
   largeur ; à plusieurs, elles se partagent la rangée. Cela se décide dans
   `Vue::tuiles()` et nulle part ailleurs — une tuile ne connaît que la largeur
@@ -259,12 +276,21 @@ devrait réapprendre à lire en passant de l'une à l'autre.
 
 ### La conversation
 
-Le champ est la **seule entrée** de l'application, et il accepte deux choses
+Le champ de l'agent est la **seule entrée qui parle**, et il accepte deux choses
 sans les distinguer à l'œil : une question pour le modèle, et une commande
 (`/veille`). Obliger à choisir un mode avant de taper, ce serait demander de
 savoir avant de commencer.
 
-Il reste en bas de la vue, toujours visible.
+**Il y a un second champ, et les deux doivent se distinguer d'un coup d'œil.**
+La recherche du Newsdesk n'est pas une entrée de l'agent : elle filtre une
+liste, elle ne dit rien à personne. Tant qu'elle portait un `/` en accent —
+le caractère que le pied d'écran enseigne pour les commandes — le champ large et
+central annonçait ce que le petit champ de droite faisait vraiment. Chacun porte
+donc l'icône de son rôle : la **loupe** cherche, le **chevron** parle. Un champ
+sans cadre ni fond n'a que ce signe et son invite ; l'invite se lit donc en
+`--xo-muted`, jamais en `--xo-faint`.
+
+Il reste en tête de sa colonne, toujours visible.
 
 `xo-timeline` porte les tours : la même grammaire que « qui d'autre en parle »
 dans l'inspecteur, parce qu'une conversation est aussi une suite d'événements

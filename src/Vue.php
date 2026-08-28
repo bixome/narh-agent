@@ -157,7 +157,14 @@ final class Vue
                titre : dans une barre latérale de 24 caractères, lui donner cinq
                colonnes d'heure ne laissait plus rien à lire. */
             . ($p->nature !== Piece::FIL
-                ? '<span class="xo-faint xo-nowrap xo-fade" style="flex: none;' . $fade . '">'
+                /* `xo-muted` et non `xo-faint` : mesuré à **3,36:1** sur le
+                   fond du desk, quand le seuil lisible est 4,5. L'heure d'une
+                   dépêche n'est pas du décor — c'est la colonne qu'on lit en
+                   premier pour situer une ligne, et la doctrine réserve
+                   `--xo-faint` à ce qu'on ne lit pas. `xo-fade` continue de
+                   dire l'âge : la fraîcheur module l'opacité, elle ne descend
+                   pas la couleur sous le seuil. */
+                ? '<span class="xo-muted xo-nowrap xo-fade" style="flex: none;' . $fade . '">'
                     . e(date('H:i', $p->quand)) . '</span>'
                 : '')
 
@@ -188,6 +195,10 @@ final class Vue
                 $p->details,
             ))
 
+            /* Ce que d'autres registres disent déjà, **rendu avec la ligne**.
+               Une photo prise en base, pas un appel : voir `Piece::$verdicts`. */
+            . self::verdicts($p->verdicts)
+
             /* La place du croisement, posée **vide** par le serveur.
                C'est ce qui permet à la passe d'écrire son état — « usgs… » —
                sans dessiner de balisage (règle 2) : elle n'écrit que du texte
@@ -196,8 +207,16 @@ final class Vue
 
                Sans cette place réservée, l'état n'aurait nulle part où aller et
                le traitement redeviendrait invisible : on ne verrait que le
-               résultat, ou rien, sans jamais savoir si quelque chose travaille. */
-            . ($p->details !== [] ? '<span class="xo-list__detail xo-fade" data-osint hidden></span>' : '')
+               résultat, ou rien, sans jamais savoir si quelque chose travaille.
+
+               Elle suit la **nature**, et non la présence d'une description :
+               c'est un événement qui se croise, jamais une dépêche prise seule.
+               Une ligne qui porte déjà un verdict garde la sienne — deux
+               services répondent sur un même sujet, et l'USGS n'a pas à se
+               taire parce que GDELT a parlé le premier. */
+            . ($p->nature === Piece::EVENEMENT && $p->profondeur === 0
+                ? '<span class="xo-list__detail xo-fade" data-osint hidden></span>'
+                : '')
             . '</li>';
     }
 
@@ -312,7 +331,26 @@ final class Vue
      */
     public static function lignesEvenements(array $groupes, int $total = 0): string
     {
-        $pieces = array_map(static fn (array $g): Piece => Piece::evenement($g), $groupes);
+        /* **Une lecture pour toute la liste.** Les verdicts déjà rendus sont en
+           base ; les redemander ligne par ligne au navigateur coûtait un
+           aller-retour chacun et n'en repeignait que douze. Ici c'est une seule
+           requête locale, avant le premier `<li>`, et le rendu sort complet.
+
+           Ce n'est pas un croisement : rien ne part sur le réseau, on relit ce
+           qu'on sait. La règle « jamais pendant l'affichage » vise l'appel
+           sortant, pas la mémoire de ses résultats. */
+        $ids = array_values(array_filter(array_map(
+            static fn (array $g): int => (int) ($g['id'] ?? 0),
+            $groupes,
+        )));
+        $connus = $ids !== [] ? Osint::connus($ids) : [];
+
+        $pieces = array_map(
+            static fn (array $g): Piece => Piece::evenement(
+                $g + ['verdicts' => $connus[(int) ($g['id'] ?? 0)] ?? []],
+            ),
+            $groupes,
+        );
         $montres = count($pieces);
 
         /* En cartes dès qu'il y a quelque chose à décrire, en ligne simple
@@ -359,10 +397,33 @@ final class Vue
                 Osint::CONCORDE => ' xo-success',
                 default         => '',
             };
+
+            /* **Le glyphe dit le régime**, et il ne pouvait pas être le même
+               pour les quatre. Un `✓` ouvrait aussi bien « l'USGS confirme la
+               magnitude » que « 75 articles parlent de ça » et « aucun séisme
+               au catalogue » : la coche de la vérification posée devant une
+               corroboration, et même devant une absence. C'est la fausse
+               vérifiabilité que tout ce chemin combat, produite au dernier
+               centimètre — le lecteur ne lit pas le verdict, il lit la coche.
+
+               Les quatre sont pris dans le pack vérifié, comme `GLYPHES`. */
+            $marque = match ($v['verdict']) {
+                Osint::CONCORDE  => '✓',
+                Osint::ECART     => '✗',
+                Osint::CORROBORE => '○',
+                default          => '·',
+            };
+
+            /* `data-verdict` : la marque qui distingue un verdict d'une ligne
+               de description, qui porte la même classe. Sans elle, la passe du
+               navigateur — qui rend **tous** les verdicts connus d'un sujet —
+               ajoutait les siens sous ceux que le serveur venait de poser, et
+               le même croisement se lisait deux fois sur la carte. Elle sait
+               maintenant quoi remplacer. */
             // Composée avant l'attribut : voir `ligne()`.
             $classes = 'xo-list__detail' . $ton;
-            $html .= '<span class="' . $classes . '">'
-                . e('✓ ' . $v['dit'])
+            $html .= '<span class="' . $classes . '" data-verdict>'
+                . e($marque . ' ' . $v['dit'])
                 . '</span>';
         }
 
@@ -570,7 +631,7 @@ final class Vue
         }
 
         $jetons = (int) ($t['jetons'] ?? 0) > 0
-            ? '<span class="xo-timeline__time xo-faint">' . (int) $t['jetons'] . ' jetons</span>'
+            ? '<span class="xo-timeline__time xo-muted">' . (int) $t['jetons'] . ' jetons</span>'
             : '';
 
         // Un tour qui ne porte qu'une tuile n'a pas de texte à afficher : le
@@ -743,7 +804,7 @@ final class Vue
             . '<span class="xo-alert__body">'
             . '<span class="xo-alert__title">À propos de cette dépêche.</span> '
             . e(Util::tronquer((string) $a['titre'], 110))
-            . ' <span class="xo-faint">— ' . e((string) $a['source_nom']) . '</span>'
+            . ' <span class="xo-muted">— ' . e((string) $a['source_nom']) . '</span>'
             . '</span>'
             . '<button class="xo-btn xo-btn--ghost" type="button" data-action="desancrer"'
             . ' data-xo-tip="Revenir à une conversation ordinaire" aria-label="Oublier cette dépêche">'
@@ -1101,7 +1162,7 @@ final class Vue
                 . ' data-outil="' . e($a['outil']) . '"'
                 . ' data-valeur="' . e($valeur) . '">'
                 . '<span class="' . $classeIcone . '" aria-hidden="true">' . ($a['ok'] ? '⚙' : '✗') . '</span>'
-                . '<span class="xo-faint xo-nowrap" style="flex: none">' . e($a['heure']) . '</span>'
+                . '<span class="xo-muted xo-nowrap" style="flex: none">' . e($a['heure']) . '</span>'
                 . '<span class="xo-muted xo-nowrap" style="flex: none; width: 16ch">'
                 . e(Util::tronquer($a['outil'], 16)) . '</span>'
                 . '<span>' . ($valeur !== '' ? e(Util::tronquer($valeur, 44)) : '<span class="xo-faint">—</span>') . '</span>'
@@ -1182,8 +1243,9 @@ final class Vue
      *
      * @param array<string, mixed>|null  $a       la dépêche, ou null
      * @param list<array<string, mixed>> $fratrie les autres rédactions
+     * @param array<string, mixed>|null  $g       le groupe dont la dépêche fait partie
      */
-    public static function inspecteur(?array $a, array $fratrie = []): string
+    public static function inspecteur(?array $a, array $fratrie = [], ?array $g = null): string
     {
         /* Une ligne, pas un état vide illustré.
 
@@ -1218,9 +1280,23 @@ final class Vue
             . '</span>'
             . '<span class="xo-muted">' . e((string) $a['source_nom']) . '</span>'
             . '<span class="xo-spacer"></span>'
-            . '<span class="xo-faint">' . e(Util::age((int) $a['date_tri'])) . '</span>'
+            . '<span class="xo-muted">' . e(Util::age((int) $a['date_tri'])) . '</span>'
             . '</div>'
             . '<p class="xo-bold">' . e((string) $a['titre']) . '</p>';
+
+        /* -- Le sujet, quand ce n'est pas le titre qu'on a cliqué --
+           Une ligne d'événement porte le titre du **groupe** ; l'inspecteur
+           montre une **dépêche**, parce qu'un groupe n'a pas de texte. Les deux
+           titres diffèrent souvent, et la source avec eux : on cliquait « Crue
+           au Népal… / Europe 1 » et on obtenait « Crue dévastatrice… / RFI ».
+           Rien n'était faux, mais rien ne disait non plus que c'était le même
+           sujet — et un écran qui change d'objet sans le dire, on croit qu'il
+           s'est trompé. Une ligne suffit à raccrocher les deux, et elle ne
+           paraît que lorsqu'il y a vraiment un écart à expliquer. */
+        $sujet = trim((string) ($g['titre'] ?? ''));
+        if ($sujet !== '' && $sujet !== trim((string) $a['titre'])) {
+            $html .= '<p class="xo-muted">Sujet · ' . e(Util::tronquer($sujet, 110)) . '</p>';
+        }
 
         if (trim((string) ($a['resume'] ?? '')) !== '') {
             $html .= '<p class="xo-muted">' . e(Util::tronquer((string) $a['resume'], 320)) . '</p>';
@@ -1237,8 +1313,16 @@ final class Vue
         if (trim((string) ($a['motifs'] ?? '')) !== '') {
             $faits['Motifs'] = (string) $a['motifs'];
         }
-        if ($fratrie !== []) {
-            $faits['Reprises'] = (count($fratrie) + 1) . ' rédactions';
+        /* **Le compte vient de la base, pas de la liste affichée.**
+           `count($fratrie) + 1` comptait les *articles* rapportés : l'écran
+           annonçait « 8 rédactions » là où la ligne cliquée disait « 6 »,
+           parce que deux maisons publiaient sur deux flux chacune. C'est le
+           double comptage que `recalculerGroupe()` existe pour empêcher,
+           réintroduit à l'affichage. `groupe.sources` est le seul chiffre qui
+           l'ait déjà résolu — une règle, un endroit. */
+        $maisons = (int) ($g['sources'] ?? 0);
+        if ($maisons > 0) {
+            $faits['Reprises'] = self::compte($maisons, 'rédaction');
         }
 
         $html .= '<dl class="xo-kv">';

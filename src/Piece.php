@@ -83,6 +83,24 @@ final class Piece
          * @var list<string>
          */
         public readonly array $details = [],
+
+        /**
+         * Ce que des registres extérieurs disent déjà de ce sujet.
+         *
+         * Des **données**, pas du balisage : `Vue::verdicts()` sait les rendre,
+         * et une pièce qui transporterait du HTML cesserait d'être une pièce.
+         *
+         * Ils viennent avec la ligne parce qu'ils sont **déjà connus** —
+         * `osint_vu` les garde. Les laisser à la passe du navigateur, c'était
+         * les perdre à chaque re-rendu : mesuré, dix verdicts en base et **un**
+         * à l'écran, la passe ne repeignant que douze lignes sur quarante et
+         * repartant de zéro à chaque changement d'onglet. Le croisement se fait
+         * toujours hors affichage ; c'est sa **restitution** qui n'avait aucune
+         * raison d'attendre un aller-retour.
+         *
+         * @var list<array{service: string, verdict: string, dit: string, quand: int}>
+         */
+        public readonly array $verdicts = [],
     ) {
     }
 
@@ -99,7 +117,7 @@ final class Piece
             $this->nature, $this->id, $this->quand, $this->titre, $this->acteur,
             $this->poids, $meta, $this->marque, $this->attributs,
             $this->profondeur, $this->pliable, $this->ouvert, $this->cache,
-            $this->details,
+            $this->details, $this->verdicts,
         );
     }
 
@@ -236,6 +254,9 @@ final class Piece
             pliable: $fils > 0,
             ouvert: $ouvert,
             details: self::description($g),
+            // Posés par `Vue::lignesEvenements()`, en une seule lecture pour
+            // toute la liste — jamais une requête par ligne.
+            verdicts: is_array($g['verdicts'] ?? null) ? $g['verdicts'] : [],
         );
     }
 

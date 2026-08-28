@@ -781,7 +781,15 @@ async function appelerFils(action = 'etat', id = 0) {
     const dit = !m.en_ligne ? 'hors ligne' : (m.charge ? m.modele : `${m.modele} · déchargé`);
     if (etatModele) {
       etatModele.textContent = dit;
-      etatModele.className = m.en_ligne ? (m.charge ? 'xo-success' : 'xo-muted') : 'xo-warning';
+      /* `xo-opt` est conservé : il dit que cette mention peut s'effacer quand
+         la bande se resserre, et remplacer la classe entière l'effaçait, lui.
+         Le ton change à chaque sondage, le rôle non — écraser l'un avec
+         l'autre remettait le nom du modèle en travers d'un écran de 375 px,
+         douze secondes après le chargement, sans que rien ne le montre en
+         développement. Un attribut de classe qui porte deux choses ne se
+         réécrit pas en bloc. */
+      etatModele.className = 'xo-opt '
+        + (m.en_ligne ? (m.charge ? 'xo-success' : 'xo-muted') : 'xo-warning');
     }
 
     return data;
@@ -1120,6 +1128,16 @@ function majRegime(enDirect) {
   // L'étiquette est la bascule : ce qu'elle déclenche doit suivre ce qu'elle
   // affiche, sinon un clic ferait l'inverse de ce qu'on lit.
   badge.dataset.action = enDirect ? 'conversation' : 'direct';
+
+  /* La palette dit lequel des deux régimes a la parole. Elle les proposait à
+     égalité, alors que l'un est toujours déjà en cours — et c'est la seule
+     porte qui n'affichait aucun état. Du texte dans une place rendue par le
+     serveur, comme partout ailleurs (règle 2). */
+  const enCours = enDirect ? 'direct' : 'conversation';
+  for (const li of document.querySelectorAll('[data-regime]')) {
+    const place = li.querySelector('[data-regime-etat]');
+    if (place) place.textContent = li.dataset.regime === enCours ? ' · en cours' : '';
+  }
 }
 
 function laMainALaConversation() {
@@ -1318,12 +1336,12 @@ if (direct.antenne) {
 /* Un onglet, une clé de réponse, un conteneur.
 
    Deux, et non plus quatre : suivi, traité et écarté sont un geste à trois
-   issues, réunis sous OSINT (voir `Ecran::newsdesk()`). Trois onglets pour un
-   même sujet débordaient sur une seconde ligne, en permanence, dans la colonne
-   la plus étroite de l'écran. */
+   issues, réunis sous « Marqués » (voir `Ecran::newsdesk()`). Trois onglets
+   pour un même sujet débordaient sur une seconde ligne, en permanence, dans la
+   colonne la plus étroite de l'écran. */
 const ONGLETS = {
   veille: 'desk-veille',
-  osint: 'desk-osint',
+  marques: 'desk-marques',
 };
 
 /* Le Fil n'est pas dans cette table, et c'est délibéré : il est **vivant**.
@@ -1467,13 +1485,22 @@ async function croiserOsint(racine = document) {
       li.dataset.osintVu = '1';
 
       if (rendu) {
+        /* La réponse porte **tous** les verdicts connus du sujet, y compris
+           ceux que le serveur a déjà rendus avec la ligne : on remplace, on
+           n'ajoute pas. Sans cela le même croisement s'écrivait deux fois. */
+        for (const vieux of li.querySelectorAll('[data-verdict]')) vieux.remove();
         place.remove();
         li.insertAdjacentHTML('beforeend', rendu);
       } else {
-        // Le vide se dit une fois, puis s'efface : « rien à croiser » sur
-        // trente-huit lignes sur quarante serait du bruit permanent.
-        place.textContent = '— rien à croiser';
-        setTimeout(() => place.remove(), 1200);
+        /* Le vide ne se dit pas. « — rien à croiser » restait 1,2 s par ligne,
+           et la boucle étant sérielle, quatre cartes le portaient en même temps
+           à l'écran : une colonne de phrases qui n'apprennent rien, sur les
+           trente-huit lignes de quarante qu'aucun service ne sait vérifier.
+           C'est la règle que `Osint::croiser()` s'applique déjà au journal —
+           un service qui ne s'applique pas ne laisse aucune trace — et l'écran
+           n'a pas de raison d'être plus bavard que le journal. L'avancement se
+           lit dans la barre d'état, qui est faite pour ça. */
+        place.remove();
       }
     }
   } finally {

@@ -127,8 +127,8 @@ try {
            Le total accompagne chaque liste, comme au chargement : sans lui, un
            onglet rouvert perdait la ligne « 40 sur 70 » que la page servait, et
            redevenait le compte muet qu'on vient de corriger. */
-        // Les trois marquages en une seule liste — l'onglet OSINT.
-        'osint'    => Vue::lignesEvenements(
+        // Les trois marquages en une seule liste — l'onglet « Marqués ».
+        'marques'  => Vue::lignesEvenements(
             $base->arbre(['marques' => true, 'traitement' => true, 'description' => true], Ecran::DESK_LIGNES),
             (int) ($statuts['suivi'] + $statuts['traite'] + $statuts['ecarte']),
         ),

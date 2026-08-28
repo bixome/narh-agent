@@ -688,12 +688,40 @@ final class Base
     /** Les autres dépêches du même événement. @return list<array<string, mixed>> */
     public function fratrie(int $groupeId, int $sauf): array
     {
+        /* **Une maison, une ligne** — le même regroupement que
+           `recalculerGroupe()`, et pour la même raison. Sans lui, « Ailleurs »
+           affichait deux fois le même article sous deux noms de flux d'une
+           seule rédaction : mesuré sur le groupe 24438, « 20min Monde » et
+           « 20 Minutes » à 20:07, « BFMTV 24/7 » et « BFM Monde » à 19:06. Une
+           liste censée montrer *qui d'autre en parle* répondait deux fois la
+           même maison, et l'œil y lit deux confirmations.
+
+           Les agrégateurs et le social en sortent aussi : ils ne confirment
+           pas. La conséquence est voulue — « Ailleurs » compte désormais
+           exactement les mêmes rédactions que `groupe.sources`, et les deux
+           nombres de l'écran ne peuvent plus diverger.
+
+           `MIN(a.date_tri)` fixe **quelle** ligne chaque maison donne : la
+           première qu'elle a publiée, celle qui dit quand elle a suivi. SQLite
+           garantit que les colonnes nues viennent de cette ligne-là dès lors
+           qu'un seul `MIN` est présent ; un `GROUP BY` sans agrégat rendrait
+           une ligne arbitraire, donc un horodatage qui change tout seul. */
         $st = $this->pdo->prepare(
-            'SELECT a.id, a.titre, a.lien, a.date_tri, s.nom AS source_nom
+            "SELECT a.id, a.titre, a.lien, MIN(a.date_tri) AS date_tri,
+                    s.nom AS source_nom, s.maison
              FROM article a JOIN source s ON s.id = a.source_id
-             WHERE a.groupe_id = ? AND a.id <> ? ORDER BY a.date_tri DESC LIMIT 12'
+             WHERE a.groupe_id = :g
+               AND a.id <> :sauf
+               AND s.rang NOT IN ('agregateur', 'social')
+               AND CASE WHEN s.maison = '' THEN 'id:' || s.id ELSE s.maison END <> (
+                   SELECT CASE WHEN s2.maison = '' THEN 'id:' || s2.id ELSE s2.maison END
+                   FROM article a2 JOIN source s2 ON s2.id = a2.source_id
+                   WHERE a2.id = :sauf
+               )
+             GROUP BY CASE WHEN s.maison = '' THEN 'id:' || s.id ELSE s.maison END
+             ORDER BY date_tri DESC LIMIT 12"
         );
-        $st->execute([$groupeId, $sauf]);
+        $st->execute(['g' => $groupeId, 'sauf' => $sauf]);
 
         return $st->fetchAll();
     }

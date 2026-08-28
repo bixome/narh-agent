@@ -153,7 +153,18 @@ hr { border: 0; border-top: 1px solid var(--xo-rule); margin: var(--xo-pad) 0; }
 /* --- 5. Liste / arbre --------------------------------------------------- */
 
 .xo-list { margin: 0; }
-.xo-panel--pad .xo-list { margin: 0 calc(var(--xo-gap) * -1); }
+
+/* Une liste posée **directement** dans un panneau rembourré déborde d'un cran
+   de chaque côté, pour que la ligne survolée aille jusqu'au bord.
+
+   Le combinateur d'enfant n'est pas un détail de style : en descendant, la
+   règle atteignait aussi les listes logées dans un sous-panneau **sans**
+   rembourrage — un panneau d'onglet à défilement, par exemple — où rien
+   n'absorbe le débord. La liste y dépassait de 16,8 px, soit exactement deux
+   gouttières, et le panneau se mettait à défiler horizontalement pour montrer
+   du vide. Un débord ne se compense que là où on sait ce qui le compense. */
+.xo-panel--pad > .xo-list,
+.xo-panel--pad > .xo-panel__body > .xo-list { margin: 0 calc(var(--xo-gap) * -1); }
 
 .xo-list__item {
   display: flex;
@@ -187,6 +198,11 @@ hr { border: 0; border-top: 1px solid var(--xo-rule); margin: var(--xo-pad) 0; }
 .xo-list__titre { min-width: 0; }
 
 .xo-list--tree .xo-list__item { padding-left: calc(var(--xo-gap) + var(--xo-depth, 0) * 2ch); }
+
+/* La liste est un **contexte de requête** : la carte se décide sur la largeur
+   réellement disponible, pas sur celle de la fenêtre.
+   Voir la bascule automatique plus bas — c'est elle qui a besoin de ceci. */
+.xo-list { container-type: inline-size; }
 
 /* Liste en cartes : deux lignes par entrée.
    Le libellé passe seul sur la première ligne et prend toute la largeur ; le
@@ -229,6 +245,39 @@ hr { border: 0; border-top: 1px solid var(--xo-rule); margin: var(--xo-pad) 0; }
   white-space: normal;
   overflow: visible;
   text-overflow: clip;
+}
+
+/* -- La carte, quand la colonne est trop étroite pour une ligne simple --
+
+   `--carte` reste une décision du serveur : une liste qui *décrit* ses entrées
+   la porte partout, quelle que soit la place. Ce qui manquait est l'inverse —
+   une liste **sans** description, posée dans une colonne de 340 px, y devenait
+   illisible sans que personne l'ait décidé : mesuré dans la colonne de l'agent,
+   des titres coupés à onze caractères (« Crue au Né… », « J'avais comp… »),
+   c'est-à-dire des lignes qui n'apprennent rien de ce qu'elles nomment.
+
+   Le serveur ne peut pas trancher : il ignore la largeur où son rendu ira, et
+   la même méthode sert le desk, une tuile du fil et un segment d'antenne. La
+   requête de conteneur est exactement l'outil de ce cas — elle interroge la
+   liste elle-même, pas la fenêtre, si bien qu'un panneau étroit dans un écran
+   large bascule seul.
+
+   520 px : en dessous, le libellé garde moins de la moitié de la ligne une fois
+   l'heure, l'acteur et la méta servis. C'est le seuil où le titre cesse d'être
+   lu et devient un identifiant qu'on devine. */
+@container (max-width: 520px) {
+  .xo-list__item {
+    flex-wrap: wrap;
+    white-space: normal;
+    padding-top: var(--xo-gap);
+    padding-bottom: var(--xo-gap);
+  }
+  .xo-list__titre {
+    flex: 1 0 100%;
+    order: -1;
+    overflow: visible;
+    text-overflow: clip;
+  }
 }
 
 /* --- 6. Onglets --------------------------------------------------------- */
@@ -326,7 +375,11 @@ hr { border: 0; border-top: 1px solid var(--xo-rule); margin: var(--xo-pad) 0; }
   border-color: var(--xo-accent); outline: none;
 }
 .xo-textarea { resize: vertical; min-height: 6em; }
-.xo-input::placeholder, .xo-textarea::placeholder { color: var(--xo-faint); }
+/* **Une invite n'est pas du décor.** Sur un champ vide elle est le seul texte
+   qui dise à quoi il sert, donc la seule étiquette qu'il ait — et `--xo-faint`
+   est réservé à ce qu'on ne lit pas (3,4:1 mesuré, pour un seuil de 4,5). Un
+   champ dont l'invite se devine est un champ qu'on ne voit pas. */
+.xo-input::placeholder, .xo-textarea::placeholder { color: var(--xo-muted); }
 .xo-input[aria-invalid="true"] { border-color: var(--xo-danger); }
 .xo-hint  { color: var(--xo-muted); }   /* aide d'un champ — la modale, c'est xo-help */
 .xo-error { color: var(--xo-danger); }
@@ -737,7 +790,7 @@ hr { border: 0; border-top: 1px solid var(--xo-rule); margin: var(--xo-pad) 0; }
   padding: 2px var(--xo-gap) 2px 0;
   background: none; border: 0; outline: none;
 }
-.xo-search input::placeholder { color: var(--xo-faint); }
+.xo-search input::placeholder { color: var(--xo-muted); }
 .xo-mark { background: var(--xo-warning); color: var(--xo-inverse); }
 
 /* --- 18. Métrique, progression, journal --------------------------------- */
@@ -1079,7 +1132,15 @@ hr { border: 0; border-top: 1px solid var(--xo-rule); margin: var(--xo-pad) 0; }
   position: absolute; left: 50%; top: 1.5em; bottom: -.3em;
   border-left: 1px solid var(--xo-rule);
 }
-.xo-timeline__body { padding-bottom: var(--xo-pad); min-width: 0; }
+/* `flex: 1` et pas seulement `min-width: 0` : le corps prenait sa largeur de
+   son **contenu**, ce qui tient tant que le contenu est du texte et cède dès
+   qu'il ne l'est pas. Une liste posée dedans est un contexte de requête (§5),
+   donc sa largeur ne dépend plus de ce qu'elle contient — elle ne pèse plus
+   rien dans le calcul du parent, et le corps se refermait sur le seul titre du
+   panneau : 126 px pour une tuile qui occupait la colonne entière.
+   Un corps de chronologie remplit ce qu'on lui donne ; c'est ce qu'on attendait
+   déjà de lui, ce n'était simplement écrit nulle part. */
+.xo-timeline__body { padding-bottom: var(--xo-pad); min-width: 0; flex: 1; }
 .xo-timeline__time { color: var(--xo-faint); }
 
 .xo-steps { display: flex; flex-wrap: wrap; align-items: baseline; }
@@ -1111,6 +1172,11 @@ hr { border: 0; border-top: 1px solid var(--xo-rule); margin: var(--xo-pad) 0; }
   flex: 1; min-width: 0;
   background: none; border: 0; outline: none; color: var(--xo-fg);
 }
+/* L'invite du prompt n'était **stylée nulle part** : elle tombait sur le gris
+   par défaut du navigateur (#757575, soit 3,6:1 sur le fond sombre), un ton
+   qui n'appartient à aucun jeton. Un champ sans cadre, sans fond et sans
+   étiquette visible n'avait plus qu'elle pour se signaler. */
+.xo-prompt input::placeholder { color: var(--xo-muted); }
 .xo-cursor::after {
   content: "▉";
   color: var(--xo-accent);
@@ -1470,6 +1536,17 @@ hr { border: 0; border-top: 1px solid var(--xo-rule); margin: var(--xo-pad) 0; }
   padding: var(--xo-gap) 1ch;
 }
 
+/* La même reprise pour la carte **automatique** (§5). Elle est ici et non
+   là-bas parce que `height: var(--xo-cell)` n'existe que dans cette peau :
+   écrite en amont, elle serait arrivée avant la règle qu'elle doit défaire. */
+@container (max-width: 520px) {
+  .xo-console .xo-list__item {
+    height: auto;
+    align-items: baseline;
+    padding: var(--xo-gap) 1ch;
+  }
+}
+
 .xo-console .xo-list__item:hover { background: var(--xo-raise); }
 .xo-console .xo-list__item[aria-selected="true"] { background: var(--xo-accent); color: var(--xo-inverse); }
 /* Le curseur du terminal : la ligne sélectionnée commence par un chevron. Il est
@@ -1523,6 +1600,40 @@ hr { border: 0; border-top: 1px solid var(--xo-rule); margin: var(--xo-pad) 0; }
   align-items: center;
   flex-wrap: nowrap;
   overflow: hidden;
+  container-type: inline-size;
+}
+
+/* **Aucun enfant ne dépasse la bande.** `flex-wrap: nowrap` empêche la bande
+   de passer à la ligne, il n'empêche pas *un enfant* de le faire : sous
+   375 px, « 1 h: » et les rappels de touches se cassaient en trois lignes de
+   72 px dans une bande haute de 18. Mesuré : `scrollHeight` 45 pour un
+   `clientHeight` de 18, et comme la bande centre ce qu'elle contient, le texte
+   était dessiné **au-dessus** d'elle, par-dessus le contenu de l'écran, puis
+   coupé. Une bande d'une ligne doit contenir des choses d'une ligne. */
+.xo-console .xo-statusbar > *,
+.xo-console .xo-keys > * { flex: none; white-space: nowrap; }
+
+/* Trop court pour tout dire : ce qui est marqué facultatif s'efface, dans un
+   ordre choisi, plutôt que de se couper en silence au bord de la bande. C'est
+   à l'application de désigner ce qui peut partir — le framework ne sait pas
+   lequel de ces comptes on est venu lire.
+
+   Deux rangs, et ils sont **exclusifs** : `xo-opt` s'en va le premier,
+   `xo-opt--tenace` ne cède qu'à l'étroit extrême. Porter les deux ferait
+   partir l'élément au premier seuil, ce qui n'est pas ce qu'on demande. */
+/* Les seuils sont en pixels et non en `ch` : dans une condition de conteneur,
+   `ch` se résout sur la fonte **du conteneur**, et la bande d'état porte une
+   fonte plus petite que le corps. Mesuré : 48ch y valait 336 px, si bien que
+   le second rang ne cédait jamais sur un écran de 375 — la bande débordait
+   encore de 151 px pour une règle qu'on croyait appliquée. Un seuil de mise en
+   page se dit dans l'unité de la mise en page. */
+@container (max-width: 560px) {
+  .xo-console .xo-statusbar .xo-opt,
+  .xo-console .xo-keys .xo-opt { display: none; }
+}
+@container (max-width: 420px) {
+  .xo-console .xo-statusbar .xo-opt--tenace,
+  .xo-console .xo-keys .xo-opt--tenace { display: none; }
 }
 .xo-console .xo-keys { font-size: inherit; }
 /* tmux écrit « 1:fichiers » : la touche et son libellé sont soudés. */

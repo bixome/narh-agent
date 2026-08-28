@@ -25,6 +25,15 @@ try {
 
     /* Le détail d'une dépêche, pour l'onglet Inspecté : le même rendu que
        partout, y compris son bouton « ouvrir l'article ». */
+    /* Le groupe accompagne la dépêche partout où l'inspecteur est rendu : il
+       porte le titre du sujet et le compte de rédactions, deux choses que la
+       dépêche seule ne sait pas et que l'écran affirmait de travers. */
+    $sujet = static function (?array $a) use ($base): ?array {
+        return $a !== null && $a['groupe_id'] !== null
+            ? $base->groupe((int) $a['groupe_id'])
+            : null;
+    };
+
     if ($type === 'depeche') {
         $a = $base->article((int) ($_GET['id'] ?? 0));
         $fratrie = $a !== null && $a['groupe_id'] !== null
@@ -32,7 +41,7 @@ try {
             : [];
 
         echo json_encode(
-            ['ok' => true, 'html' => Vue::inspecteur($a, $fratrie)],
+            ['ok' => true, 'html' => Vue::inspecteur($a, $fratrie, $sujet($a))],
             JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE,
         );
         exit;
@@ -78,11 +87,14 @@ try {
                     ?: '<p class="xo-muted">Aucun croisement pour ce sujet.</p>',
                 'vérification',
             ],
+            /* Le fil d'Ariane porte le titre du **sujet**, pas celui de la
+               dépêche de tête : c'est la ligne qu'on a cliquée, et le seul
+               nom sous lequel on saura reconnaître où l'on est. */
             default => [
                 Vue::inspecteur($a, $a['groupe_id'] !== null
                     ? $base->fratrie((int) $a['groupe_id'], (int) $a['id'])
-                    : []),
-                Util::tronquer((string) $a['titre'], 48),
+                    : [], $sujet($a)),
+                Util::tronquer((string) ($sujet($a)['titre'] ?? $a['titre']), 48),
             ],
         };
 

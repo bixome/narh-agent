@@ -166,6 +166,36 @@ final class Ecran
     }
 
     /**
+     * Ce qu'on peut convoquer au champ, tel que `COMMANDES` le déclare.
+     *
+     * Même raison que `gestesDeLigne()` juste au-dessus, et même défaut trouvé
+     * un cran plus loin : la liste était écrite à la main et annonçait **cinq**
+     * commandes quand la palette en proposait dix-sept. Manquaient, entre
+     * autres, les deux qui font passer d'un régime à l'autre — c'est-à-dire la
+     * moitié de ce que NARH sait faire : l'aide ne mentionnait nulle part que
+     * l'agent peut parler tout seul.
+     *
+     * Les groupes viennent de la table, dans son ordre, et l'aide suit donc
+     * l'écran sans qu'on y pense. Seules paraissent les commandes qui ne visent
+     * pas une ligne : celles-là sont déjà décrites par `gestesDeLigne()`, et
+     * les répéter ferait deux listes à tenir d'accord.
+     *
+     * @return array<string, list<array{nom: string, libelle: string}>>
+     */
+    private static function convocations(): array
+    {
+        $par = [];
+        foreach (self::COMMANDES as $cle => [$libelle, $natures, , $groupe]) {
+            if ($natures !== '') {
+                continue;
+            }
+            $par[$groupe][] = ['nom' => '/' . $cle, 'libelle' => $libelle];
+        }
+
+        return $par;
+    }
+
+    /**
      * Le contexte : ce que la barre d'état doit dire, et rien de plus.
      *
      * La collecte tourne qu'on la regarde ou non ; l'écran l'entretient au
@@ -229,11 +259,11 @@ final class Ecran
                onglets que le desk se donnait le travail de l'agent, et c'est
                donc là que la distinction doit se lire. La veille montre ce qui
                arrive — rien n'y a encore été décidé par personne. */
-            /* Une seule liste pour les trois marquages — l'onglet OSINT. Voir
-               `Base::clauses()` : trois onglets pour un geste à trois issues
-               coûtaient une ligne d'onglets entière et cassaient la lecture
-               d'un dossier suivi puis traité. */
-            'osint'      => $base->arbre(['marques' => true, 'traitement' => true, 'description' => true], self::DESK_LIGNES),
+            /* Une seule liste pour les trois marquages — l'onglet « Marqués ».
+               Voir `Base::clauses()` : trois onglets pour un geste à trois
+               issues coûtaient une ligne d'onglets entière et cassaient la
+               lecture d'un dossier suivi puis traité. */
+            'marques'    => $base->arbre(['marques' => true, 'traitement' => true, 'description' => true], self::DESK_LIGNES),
             // L'onglet Outils : ce que l'agent a déjà fait dans ce fil.
             'appels'     => Memoire::outils(Agent::filId(), 20),
             // Plus de liste de fils en surface : un seul « fil » à l'écran, et
@@ -449,12 +479,19 @@ final class Ecran
     <strong>NARH</strong>
     <span class="xo-statusbar__label">veille:</span>
     <span id="etat-sources" class="<?= $mortes > 0 ? 'xo-warning' : 'xo-success' ?>"><?= (int) ($stats['sources']['saines'] ?? 0) ?>/<?= (int) ($stats['sources']['total'] ?? 0) ?></span>
-    <span class="xo-statusbar__label">1 h:</span>
-    <span id="etat-h1"><?= (int) $stats['h1'] ?></span>
-    <span class="xo-statusbar__label">cycle:</span>
-    <span id="etat-cycle" class="xo-muted"><?= e(Util::duree((int) ($c['cycle']['ms'] ?? 0))) ?></span>
-    <?= Icone::rendre('moteur') ?>
-    <span class="xo-faint" id="etat-modele">—</span>
+    <?php /* Ce qui cède quand la bande se resserre, et dans quel ordre. Sous
+             375 px la ligne demandait 583 px : tout ce qui dépassait était
+             coupé sans un mot, et les libellés se brisaient par-dessus l'écran.
+             La cadence du cycle et le nom du modèle partent d'abord — on les
+             consulte, on ne les surveille pas ; le compte de l'heure écoulée
+             tient plus longtemps ; l'état de la veille, celui du sondage et
+             l'horloge ne partent jamais. */ ?>
+    <span class="xo-statusbar__label xo-opt--tenace">1 h:</span>
+    <span id="etat-h1" class="xo-opt--tenace"><?= (int) $stats['h1'] ?></span>
+    <span class="xo-statusbar__label xo-opt">cycle:</span>
+    <span id="etat-cycle" class="xo-muted xo-opt"><?= e(Util::duree((int) ($c['cycle']['ms'] ?? 0))) ?></span>
+    <?= Icone::rendre('moteur', 'opt') ?>
+    <span class="xo-muted xo-opt" id="etat-modele">—</span>
     <!-- Le régime n'est pas ici : il porte une étiquette de couleur dans la
          tuile Utilisateur (`Vue::regime()`), où il se voit sans se lire. Le
          répéter dans cette ligne, c'était deux endroits à tenir d'accord. -->
@@ -463,7 +500,7 @@ final class Ecran
       <span class="xo-spinner" id="temoin" aria-hidden="true"></span>
       <span class="xo-muted" id="etat-sondage">en écoute</span>
     </span>
-    <span class="xo-faint" id="horloge"><?= e(date('H:i:s', $maintenant)) ?></span>
+    <span class="xo-muted" id="horloge"><?= e(date('H:i:s', $maintenant)) ?></span>
   </div>
 
   <!-- Trois bandes, et la page ne défile jamais : l'en-tête et le champ restent
@@ -631,15 +668,19 @@ final class Ecran
     </div>
   </main>
 
+  <!-- Le rappel des touches cède dans l'ordre inverse de son utilité : les
+       comptes de la base et la version d'abord — on ne vient pas les lire ici —
+       puis le second rappel, et « Ctrl+K » reste jusqu'au bout parce qu'il ouvre
+       tout le reste. -->
   <div class="xo-keys">
     <span><kbd>Ctrl+K</kbd> commandes</span>
-    <span><kbd>/</kbd> une commande dans le champ</span>
+    <span class="xo-opt--tenace"><kbd>/</kbd> une commande dans le champ</span>
     <!-- Les deux portes, et dans cet ordre : `?` ne part pas depuis le champ,
          qui a le focus au chargement. Celle qui marche toujours d'abord. -->
-    <span><kbd>/aide</kbd> ou <kbd>?</kbd> hors du champ</span>
+    <span class="xo-opt"><kbd>/aide</kbd> ou <kbd>?</kbd> hors du champ</span>
     <span class="xo-spacer"></span>
-    <span class="xo-faint" id="etat-pied"><?= (int) $stats['articles'] ?> dépêches · <?= (int) $stats['groupes'] ?> événements</span>
-    <span class="xo-faint">NARH <?= e(NARH_VERSION) ?></span>
+    <span class="xo-muted xo-opt" id="etat-pied"><?= (int) $stats['articles'] ?> dépêches · <?= (int) $stats['groupes'] ?> événements</span>
+    <span class="xo-muted xo-opt">NARH <?= e(NARH_VERSION) ?></span>
   </div>
 
 </div>
@@ -677,13 +718,25 @@ final class Ecran
   <ul class="xo-palette__list xo-list" data-xo-list role="listbox">
     <?php $i = 0; foreach (self::COMMANDES as $cle => [$texte, , $phase, $groupe, $icone]): ?>
     <li class="xo-list__item" role="option" aria-selected="<?= $i++ === 0 ? 'true' : 'false' ?>"
-        data-value="<?= e($cle) ?>">
+        data-value="<?= e($cle) ?>"<?= $groupe === 'Régime' ? ' data-regime="' . e($cle) . '"' : '' ?>>
       <?= Icone::rendre($icone) ?>
       <!-- Le libellé reste seul dans `xo-palette__label` : c'est là que XOSHUI
            insère le surlignage de la frappe, et une icône dedans serait
            parcourue par la recherche. -->
       <span class="xo-palette__label"><?= e($texte) ?></span>
-      <span class="xo-list__meta"><?= e($groupe) ?><?= $phase !== '' ? ' · ' . e($phase) : '' ?></span>
+      <!-- « Passer en agent en direct » et « Revenir en conversation » se
+           présentaient à égalité, alors que l'un des deux est toujours déjà
+           fait. La palette est la seule porte qui n'affiche aucun état : le
+           champ voit le régime dans la barre, l'en-tête le porte en étiquette,
+           et elle proposait les deux comme si l'on ne savait pas d'où l'on
+           part. La mention est écrite par `majRegime()`, dans cette place
+           rendue vide — du texte dans un élément existant, comme l'état du
+           croisement (règle 2). -->
+      <span class="xo-list__meta"><?= e($groupe) ?><?= $phase !== '' ? ' · ' . e($phase) : '' ?><?php
+        /* Rendue **juste** dès le chargement, et non au premier changement de
+           régime : une palette ouverte avant toute bascule aurait menti. */
+        $enCours = $groupe === 'Régime' && $cle === ($antenne ? 'direct' : 'conversation');
+        ?><span data-regime-etat><?= $enCours ? ' · en cours' : '' ?></span></span>
     </li>
     <?php endforeach; ?>
   </ul>
@@ -785,12 +838,25 @@ final class Ecran
     <dt>Conversation</dt><dd>Tout s'y passe : ce qu'on demande, et ce que ça donne.</dd>
     <dt>Une tuile</dt><dd>Un résultat encadré, posé dans le fil. Elle se refait à chaque lecture.</dd>
 
-    <dt class="xo-help__group">Convoquer</dt>
-    <dt><code>/veille</code></dt><dd>Le fil des événements collectés.</dd>
-    <dt><code>/alertes</code></dt><dd>Ce qui dépasse le seuil, sur six heures.</dd>
-    <dt><code>/journal</code></dt><dd>La collecte et l'agent, dans le même ordre.</dd>
-    <dt><code>/memoire</code></dt><dd>Les fils passés. Un clic en rouvre un.</dd>
+    <!-- Énumérées depuis COMMANDES, pour la même raison que le clic droit
+         ci-dessous : cinq commandes étaient listées à la main quand la palette
+         en offrait dix-sept, dont les deux régimes. -->
+    <?php foreach (self::convocations() as $groupe => $commandes): ?>
+    <dt class="xo-help__group"><?= e($groupe) ?></dt>
+    <?php foreach ($commandes as $cmd): ?>
+    <dt><code><?= e($cmd['nom']) ?></code></dt><dd><?= e($cmd['libelle']) ?>.</dd>
+    <?php endforeach; ?>
+    <?php endforeach; ?>
+    <dt class="xo-help__group">Où l'on tape</dt>
+    <dt>Le champ</dt><dd>Sous « Agent », à droite : une question, ou une commande. Entrée envoie.</dd>
+    <dt>La loupe</dt><dd>En tête du Newsdesk : elle cherche dans la veille, elle ne parle pas à l'agent.</dd>
     <dt>Ctrl + K</dt><dd>Les mêmes commandes, filtrables.</dd>
+    <dt><kbd>Échap</kbd></dt><dd>Referme une boîte ; remonte d'un niveau dans le desk.</dd>
+
+    <dt class="xo-help__group">Les trois onglets</dt>
+    <dt>Fil</dt><dd>La chronologie : tours, tuiles et segments d'antenne mêlés.</dd>
+    <dt>Veille</dt><dd>Ce qui arrive, classé par ce qui tient — pas par l'heure.</dd>
+    <dt>Marqués</dt><dd>Ce dont on s'est occupé : suivi, traité, écarté.</dd>
 
     <dt class="xo-help__group">Sur une ligne de tuile</dt>
     <dt>Clic</dt><dd>La sélectionne.</dd>
@@ -1034,10 +1100,18 @@ final class Ecran
                obligeait à y revenir pour chercher. En tête de colonne, elle
                commande la liste qu'on regarde. */
             . '<div class="xo-row" style="flex: none; margin-bottom: 8px">'
+            /* **La loupe, pas la barre oblique.** Le pied d'écran enseigne
+               « / une commande dans le champ » ; ce champ-ci portait donc, en
+               accent et en gras, le caractère qui désigne l'autre. Les deux
+               entrées de l'application se distinguent à un signe, et le signe
+               était inversé : le champ large et central annonçait les
+               commandes, le champ où l'on parle vraiment n'était qu'un chevron
+               gris dans la colonne de droite. L'icône vient du pack de NARH,
+               où elle existait déjà et n'était utilisée nulle part. */
             . '<label class="xo-search" style="flex: 1 1 12ch; min-width: 8ch">'
-            . '<span class="xo-search__prefix" aria-hidden="true">/</span>'
+            . '<span class="xo-search__prefix">' . Icone::rendre('chercher') . '</span>'
             . '<input type="search" id="desk-q" aria-label="Chercher dans la veille"'
-            . ' placeholder="chercher…"></label>'
+            . ' placeholder="chercher dans la veille…"></label>'
             /* Les deux seuls boutons de l'écran dont l'icône soit toute la
                parole — le reste des gestes écrit son verbe à côté. Ils gardent
                leur `aria-label` faute de pouvoir l'écrire : sans lui, un
@@ -1085,8 +1159,17 @@ final class Ecran
             . ' data-rafraichir="fil">Fil</button>'
             . '<button class="xo-tabs__tab" role="tab" aria-selected="false" aria-controls="onglet-veille"'
             . ' data-rafraichir="veille">Veille</button>'
-            . '<button class="xo-tabs__tab" role="tab" aria-selected="false" aria-controls="onglet-osint"'
-            . ' data-rafraichir="osint">OSINT <span data-compte="marques">'
+            /* **« Marqués », pas « OSINT ».** Cet onglet liste ce dont on
+               s'est occupé — suivi, traité, écarté — et son compte est celui
+               des trois marquages. Il s'appelait OSINT, et tant qu'aucun
+               service extérieur ne répondait, le nom ne trompait personne :
+               il n'y avait rien à confondre. Du jour où GDELT corrobore, les
+               verdicts sont apparus dans **Veille**, sous les lignes du desk,
+               pendant que l'onglet nommé OSINT continuait d'afficher des
+               marquages. Un intitulé qui promet ce qu'un voisin livre est pire
+               qu'un intitulé vague. */
+            . '<button class="xo-tabs__tab" role="tab" aria-selected="false" aria-controls="onglet-marques"'
+            . ' data-rafraichir="marques">Marqués <span data-compte="marques">'
             . (int) ($statuts['suivi'] + $statuts['traite'] + $statuts['ecarte'])
             . '</span></button>'
             . '</div>'
@@ -1119,11 +1202,11 @@ final class Ecran
             . '</div>'
             . '</section>'
 
-            . '<section id="onglet-osint" role="tabpanel" class="xo-tabpanel xo-scroll"'
+            . '<section id="onglet-marques" role="tabpanel" class="xo-tabpanel xo-scroll"'
             . ' style="flex: 1; min-height: 0" hidden>'
-            . '<div id="desk-osint">'
+            . '<div id="desk-marques">'
             . Vue::lignesEvenements(
-                $c['osint'],
+                $c['marques'],
                 (int) ($statuts['suivi'] + $statuts['traite'] + $statuts['ecarte']),
             ) . '</div>'
             . '</section>'
@@ -1228,7 +1311,9 @@ final class Ecran
             . '<span class="xo-faint" data-dit></span>'
             . '</span>'
             . '<span class="xo-spacer"></span>'
-            . '<span class="xo-faint">Entrée pour envoyer</span>'
+            /* Le seul mode d'emploi du seul endroit où l'on parle : il était
+               écrit dans le ton réservé au décor. */
+            . '<span class="xo-muted">Entrée pour envoyer</span>'
             . '</div>'
             . '</div>';
     }
